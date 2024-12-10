@@ -120,9 +120,9 @@ dependencies = [
 
 [[package]]
 name = "gcd"
-version = "1.2.0"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c21a76e102bba7724d661dbbba5e483ec0707088be6a01cf3879229e75da4d9f"
+checksum = "1d758ba1b47b00caf47f24925c0074ecb20d6dfcffe7f6d53395c0465674841a"
 
 [[package]]
 name = "heck"
