@@ -54,7 +54,7 @@ fn main() {
             .long("version")
             .required(true)
             .help("Version of EDF to use (global, partitioned, or EDF(k))")
-            .value_parser(["global", "partitioned", "k"]))
+            )//.value_parser(["global", "partitioned", "k"]))
             
         .arg(Arg::new("workers")
             .short('w')
@@ -88,10 +88,14 @@ fn main() {
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap();
     let worker_number = matches.get_one::<String>("workers").unwrap();
+    let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
+
+    // println!("{:?}", version);
+
 
     let schedulable = simulation(taskset, 1);
         
-    print!("{:?}\n", schedulable);
+    println!("{:?}", schedulable);
 
     process::exit(schedulable as i32);
 }
