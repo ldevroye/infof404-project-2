@@ -1,0 +1,9 @@
+[package]
+name = "infof404-project-1-v2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+gcd = "1.0"
+csv = "1.2"
