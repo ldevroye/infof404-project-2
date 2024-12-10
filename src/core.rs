@@ -1,11 +1,17 @@
 use crate::{scheduler, SchedulingCode, TaskSet};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 
-pub fn simulation(mut taskset: TaskSet) -> SchedulingCode {
+pub fn simulation(mut taskset: TaskSet, num_processor: u32) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
 
-    if taskset.is_empty() || !taskset.is_feasible() {
+    if taskset.is_empty() {
+        println!("empty");
         return SchedulingCode::SchedulableShortcut;
+    }
+
+    if !taskset.is_feasible(num_processor) {
+        println!("stop feasible");
+        return SchedulingCode::UnschedulableShortcut
     }
     
     if scheduler.checking_schedulability() {

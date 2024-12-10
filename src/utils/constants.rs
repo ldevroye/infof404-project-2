@@ -5,9 +5,10 @@ use clap::ValueEnum;
 #[derive(Debug)]
 pub enum SchedulingCode {
     SchedulableSimulated = 0,
-    UnschedulableSimulated = 1,
-    SchedulableShortcut = 2,
+    SchedulableShortcut = 1,
+    UnschedulableSimulated = 2,
     UnschedulableShortcut = 3,
+    CannotTell = 4,
 }
 
 
