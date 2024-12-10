@@ -18,7 +18,6 @@ pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
 
     for result in rdr.records() {
         let record = result?;
-        println!("record : {:?}", record);
 
         let offset: TimeStep = record[0].parse()?;
         let computation_time: TimeStep = record[1].trim().parse()?;
@@ -89,8 +88,6 @@ fn main() {
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap();
     let worker_number = matches.get_one::<String>("workers").unwrap();
-
-    println!("taskset : {:#?}", taskset);
 
     let schedulable = simulation(taskset, 1);
         

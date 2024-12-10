@@ -5,16 +5,14 @@ pub fn simulation(mut taskset: TaskSet, num_processor: u32) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
 
     if taskset.is_empty() {
-        println!("empty");
         return SchedulingCode::SchedulableShortcut;
     }
 
     if !taskset.is_feasible(num_processor) {
-        println!("stop feasible");
         return SchedulingCode::UnschedulableShortcut
     }
     
-    if scheduler.checking_schedulability() {
+    if scheduler.checking_schedulability() { // TODO check ?
         if scheduler.schedulability_proven(&taskset) {
             return SchedulingCode::SchedulableShortcut;
         } else {
