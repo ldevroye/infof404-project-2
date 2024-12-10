@@ -1,86 +1,16 @@
-use std::str::FromStr;
 use std::error::Error;
 use std::process;
-use clap::{Parser, ValueEnum};
+use clap::{Command, Arg};
 use csv;
 
-use infof404_project_1_v2::core::simulation;
-use infof404_project_1_v2::models::{task::Task, taskset::TaskSet, scheduler::{EarliestDeadlineFirst}};
-use infof404_project_1_v2::TimeStep;
-
-/// Distribution type
-/// This is not a ValueEnum because of K(String) being dynamic
-#[derive(Debug)]
-enum Distribution {
-    Global,
-    Partitioned,
-    K(u32),
-}
-
-impl FromStr for Distribution {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "global" => Ok(Distribution::Global),
-            "partitioned" => Ok(Distribution::Partitioned),
-            other => Ok(Distribution::K(other.trim().parse().unwrap())),
-        }
-    }
-}
-
-/// Heuristic options
-#[derive(Debug, Clone, ValueEnum)]
-enum Heuristic {
-    Ff,
-    Nf,
-    Bf,
-    Wf,
-}
-
-/// Scheduling strategies
-#[derive(Debug, Clone, ValueEnum)]
-enum Scheduling {
-    Iu,
-    Du,
-}
-
-#[derive(Parser, Debug)]
-#[command(
-    name = "Cargo Run Task Parser",
-    about = "Parses task file and configuration for running tasks",
-    disable_help_flag = true
-)]
-struct Args {
-    /// Path to the task file
-    task_file: String,
-
-    /// Specifies the m value
-    m: String,
-
-    #[arg(short, long)]
-    version_flag: bool,
-
-    /// Specifies the type of distribution
-    distribution: String,
-
-    /// Specifies the weight parameter
-    #[arg(short, long)]
-    weight: Option<u32>,
-
-    /// Specifies the heuristic strategy
-    #[arg(short, long)]
-    heuristic: Option<Heuristic>,
-
-    /// Specifies the scheduling strategy
-    #[arg(short, long)]
-    scheduling: Option<Scheduling>,
-
-}
+use multiprocessor::core::simulation;
+use multiprocessor::models::{task::Task, taskset::TaskSet, scheduler::{EarliestDeadlineFirst}};
+use multiprocessor::TimeStep;
+use multiprocessor::constants::{EDFVersion, Heuristic, Sorting};
 
 
 /// Reads a task set file and returns a `TaskSet`
-pub fn read_task_file(file_path: String) -> Result<TaskSet, Box<dyn Error>> {
+pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
     let mut rdr = csv::Reader::from_path(file_path)?;
     let mut tasks = Vec::new();
 
@@ -101,29 +31,52 @@ pub fn read_task_file(file_path: String) -> Result<TaskSet, Box<dyn Error>> {
 }
 
 fn main() {
-    let args = Args::try_parse().unwrap_or_else(|err| {
-        eprintln!("{}\n", err);
-        std::process::exit(1);
-    });
+    // cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
+    // example : cargo run taskset.txt 4 -v partitioned -w 8 -h ff -s iu
+    let matches = Command::new("EDF Scheduler")
+        .version("1.0")
+        .author("Your Name <your_email@example.com>")
+        .about("Simulates EDF scheduling for task sets")
+        .disable_version_flag(true)
+        .disable_help_flag(true)
+        
+        .arg(Arg::new("task_file")
+        .required(true)
+        .help("Path to the task set file"))
 
-    /* 
-    println!("Task File: {}", args.task_file);
-    println!("M: {}", args.m);
-    println!("Distribution: {}", args.distribution);
+        .arg(Arg::new("m")
+            .required(true)
+            .help("Number of cores"))
 
-    if let Some(weight) = args.weight {
-        println!("Weight: {}", weight);
-    }
-    if let Some(heuristic) = args.heuristic {
-        println!("Heuristic: {:?}", heuristic);
-    }
-    if let Some(scheduling) = args.scheduling {
-        println!("Scheduling: {:?}", scheduling);
-    }
-    */
+        .arg(Arg::new("version")
+            .short('v')
+            .long("version")
+            .required(true)
+            .help("Version of EDF to use (global, partitioned, or EDF(k))")
+            .value_parser(["global", "partitioned", "k"]))
+            
+        .arg(Arg::new("workers")
+            .short('w')
+            .long("workers")
+            .help("Number of workers to run the simulation")
+            .default_value("4"))
+
+        .arg(Arg::new("heuristic")
+            .short('h')
+            .long("heuristic")
+            .help("Heuristic to use for partitioned scheduling")
+            .value_parser(["ff", "nf", "bf", "wf"]))
+
+        .arg(Arg::new("sorting")
+            .short('s')
+            .long("sorting")
+            .help("Task ordering based on utilization")
+            .value_parser(["iu", "du"]))
+
+        .get_matches();
     
     // Read tasks from file
-    let taskset = match read_task_file(args.task_file) {
+    let taskset = match read_task_file(matches.get_one::<String>("task_file").unwrap()) {
         Ok(taskset) => taskset,
         Err(e) => {
             eprintln!("Error reading task file: {}", e);
@@ -131,8 +84,12 @@ fn main() {
         }
     };
 
-    let mut scheduler = EarliestDeadlineFirst;
-    let schedulable = simulation(taskset, &mut scheduler);
+    let heuristic = matches.get_one::<String>("heuristic").unwrap();
+    let core_number = matches.get_one::<String>("m").unwrap();
+    let worker_number = matches.get_one::<String>("workers").unwrap();
+
+    print!("{} {} {}", heuristic, core_number, worker_number);
+    let schedulable = simulation(taskset);
         
     
 

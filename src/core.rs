@@ -1,10 +1,9 @@
-use crate::{TaskSet, SchedulingCode};
-use crate::scheduler::Scheduler;
+use crate::{scheduler, SchedulingCode, TaskSet};
+use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 
-pub fn simulation(
-    mut taskset: TaskSet,
-    scheduler: &mut dyn Scheduler,
-) -> SchedulingCode {
+pub fn simulation(mut taskset: TaskSet) -> SchedulingCode {
+    let scheduler = EarliestDeadlineFirst;
+
     if taskset.is_empty() || !taskset.is_feasible() {
         return SchedulingCode::SchedulableShortcut;
     }

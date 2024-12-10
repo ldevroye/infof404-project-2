@@ -1,9 +1,9 @@
 [package]
-name = "infof404-project-1-v2"
+name = "multiprocessor"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.3", features = ["derive"] }
+clap = { version = "4.5.23", features = ["derive"] }
 gcd = "2.3"
 csv = "1.2"

@@ -4,7 +4,7 @@ use crate::{Job, TimeStep};
 pub struct EarliestDeadlineFirst;
 
 impl Scheduler for EarliestDeadlineFirst {
-    fn schedule<'a>(&'a mut self, jobs: &'a mut Vec<Job>) -> Option<&'a mut Job> {
+    fn schedule<'a>(&'a self, jobs: &'a mut Vec<Job>) -> Option<&'a mut Job> {
         if jobs.is_empty() {
             return None;
         }
