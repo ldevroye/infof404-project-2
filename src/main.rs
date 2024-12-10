@@ -89,9 +89,9 @@ pub fn read_task_file(file_path: String) -> Result<TaskSet, Box<dyn Error>> {
     for result in rdr.records() {
         let record = result?;
         let offset: TimeStep = record[0].parse()?;
-        let computation_time: u32 = record[1].parse()?;
-        let deadline: u32 = record[2].parse()?;
-        let period: u32 = record[3].parse()?;
+        let computation_time: TimeStep = record[1].trim().parse()?;;
+        let deadline: TimeStep = record[2].trim().parse()?;
+        let period: TimeStep = record[3].trim().parse()?;
 
         tasks.push(Task::new(id, offset, computation_time, deadline, period));
         id += 1;
@@ -106,6 +106,7 @@ fn main() {
         std::process::exit(1);
     });
 
+    /* 
     println!("Task File: {}", args.task_file);
     println!("M: {}", args.m);
     println!("Distribution: {}", args.distribution);
@@ -119,9 +120,8 @@ fn main() {
     if let Some(scheduling) = args.scheduling {
         println!("Scheduling: {:?}", scheduling);
     }
-
-    return;
-
+    */
+    
     // Read tasks from file
     let taskset = match read_task_file(args.task_file) {
         Ok(taskset) => taskset,

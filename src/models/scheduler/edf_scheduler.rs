@@ -12,6 +12,7 @@ impl Scheduler for EarliestDeadlineFirst {
         jobs.sort_by(|a, b| a.deadline().cmp(&b.deadline()));
         jobs.first_mut()
     }
+    
     fn feasibility_interval(&self, taskset: &crate::TaskSet) -> (TimeStep, TimeStep) {
         let w_0 = taskset
             .iter()
