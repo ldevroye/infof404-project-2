@@ -1,4 +1,4 @@
-use crate::{scheduler, SchedulingCode, TaskSet};
+use crate::{scheduler, Job, SchedulingCode, TaskSet};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 
 pub fn simulation(mut taskset: TaskSet, num_processor: u32) -> SchedulingCode {
@@ -20,22 +20,26 @@ pub fn simulation(mut taskset: TaskSet, num_processor: u32) -> SchedulingCode {
         }
     }
 
-    let mut queue = Vec::new();
+    let mut queue: Vec<Job> = Vec::new();
     let feasibility_interval = scheduler.feasibility_interval(&taskset).1;
     
     for t in 0..feasibility_interval {
-        // Release new jobs at time `t`
+        // Try to release new jobs at time `t`
         queue.extend(taskset.release_jobs(t));
         
         // Check for missed deadlines
         if queue.iter().any(|job| job.deadline_missed(t)) {
+            println!("time {:?}", t);
             return SchedulingCode::UnschedulableSimulated;
         }
 
         // Clone the job to be scheduled to avoid multiple mutable borrows
-        if let Some(elected) = scheduler.schedule(&mut queue) {
-            elected.schedule(1);
+        if let Some(index_elected) = scheduler.schedule(&mut queue){
+            if let Some(elected) = queue.get_mut(index_elected) {
+                elected.schedule(1);
+            }
         }
+    
 
         // Filter out completed jobs
         queue = queue.into_iter().filter(|job| !job.is_complete()).collect();

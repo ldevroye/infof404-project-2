@@ -8,7 +8,7 @@ pub enum SchedulingCode {
     SchedulableShortcut = 1,
     UnschedulableSimulated = 2,
     UnschedulableShortcut = 3,
-    CannotTell = 4,
+    CantTell = 4,
 }
 
 

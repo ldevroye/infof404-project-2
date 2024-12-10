@@ -1,8 +1,8 @@
-use super::{job::Job, TimeStep};
+use super::{job::Job, TimeStep, ID};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Task {
-    id: u32,
+    id: ID,
     offset: TimeStep,   // O_i : Offset.
     wcet: TimeStep,     // C_i : Worst-case execution time.
     deadline: TimeStep, // D_i : Relative deadline.
@@ -41,31 +41,33 @@ impl Task {
     }
 
     pub fn deadline(&self) -> TimeStep {
-        self.deadline
+        self.deadline + self.offset
     }
 
     pub fn period(&self) -> TimeStep {
-        self.period
+        self.period + self.offset
     }
 
     pub fn utilisation(&self) -> f64 {
         self.wcet as f64 / self.period as f64
     }
 
-    pub fn spawn_job(&mut self, t: TimeStep) -> Option<Job> {
+    pub fn spawn_job(&mut self, current_time: TimeStep) -> Option<Job> {
         // Not yet released
-        if t < self.offset {
+        if current_time < self.offset {
             return None;
         }
         // Not a time at which a job should be released
-        if (t - self.offset) % self.period != 0 {
+        if (current_time - self.offset) % self.period != 0 {
             return None;
         }
+        
         self.jobs_released += 1;
-        Some(Job::new(
-            self.jobs_released,
-            self.clone(),
-            self.deadline + t,
-        ))
+        
+        Some(Job::new(self.jobs_released,
+            self.id, 
+            self.wcet,
+            self.deadline(), 
+            self.deadline() + current_time))
     }
 }

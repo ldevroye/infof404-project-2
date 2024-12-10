@@ -1,43 +1,49 @@
 use crate::TimeStep;
 
-use super::Task;
+use super::{Task, ID};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Job {
-    id: u32,
-    task: Task,
-    deadline: TimeStep,         // Absolute deadline for the job.
-    remaining_time: TimeStep,   // Remaining execution time for the job.
+    id: ID,                         // Unique identifier for the job
+    task_id: ID,                    // Identifier for the associated task
+    task_deadline: TimeStep,        // Deadline for the task
+    remaining_time: TimeStep,       // Remaining execution time for the job
+    absolute_deadline: TimeStep,    // Absolute deadline for the job (including offsets)
 }
 
 impl Job {
-    pub fn new(id: u32, task: Task, deadline: TimeStep) -> Self {
+    pub fn new(id: ID, task_id: ID, remaining_time: TimeStep, task_deadline: TimeStep, absolute_deadline: TimeStep) -> Self {
         Self {
             id,
-            remaining_time: task.wcet(),
-            task,
-            deadline,
+            task_id,
+            task_deadline,
+            remaining_time,
+            absolute_deadline,
         }
     }
 
-    pub fn id(&self) -> u32 {
+    pub fn id(&self) -> ID {
         self.id
     }
 
-    pub fn task(&self) -> &Task {
-        &self.task
+    pub fn task_id(&self) -> ID {
+        self.task_id
     }
 
-    pub fn deadline(&self) -> TimeStep {
-        self.deadline
+    pub fn task_deadline(&self) -> TimeStep {
+        self.task_deadline
     }
 
-    pub fn remaining_time(&self) -> u32 {
+    pub fn remaining_time(&self) -> TimeStep {
         self.remaining_time
     }
 
+    pub fn absolute_deadline(&self) -> TimeStep {
+        self.absolute_deadline
+    }
+
     pub fn deadline_missed(&self, t: TimeStep) -> bool {
-        self.remaining_time > 0 && t > self.deadline
+        self.remaining_time > 0 && t >= self.absolute_deadline
     }
 
     pub fn is_complete(&self) -> bool {
