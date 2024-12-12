@@ -7,3 +7,4 @@ edition = "2021"
 clap = { version = "4.5.23", features = ["derive"] }
 gcd = "2.3"
 csv = "1.2"
+rayon = "1.10.0"

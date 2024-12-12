@@ -25,7 +25,6 @@ impl Scheduler for EarliestDeadlineFirst {
             }
         }
 
-        // Return the index of the job with the smallest (earliest) absolute deadline.
         Some(index_to_ret)
         
     }

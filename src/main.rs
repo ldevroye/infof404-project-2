@@ -1,7 +1,9 @@
 use std::error::Error;
 use std::process;
-use clap::{Command, Arg};
+use clap::{Arg, ArgMatches, Command};
 use csv::ReaderBuilder;
+use rayon::prelude::*;
+use std::cmp::Ordering;
 
 use multiprocessor::core::simulation;
 use multiprocessor::models::{task::Task, taskset::TaskSet, scheduler::{EarliestDeadlineFirst}};
@@ -31,10 +33,8 @@ pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
     Ok(TaskSet::new(tasks))
 }
 
-fn main() {
-    // cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
-    // example : cargo run taskset.txt 4 -v partitioned -w 8 -h ff -s iu
-    let matches = Command::new("EDF Scheduler")
+fn parse_args() -> ArgMatches {
+    Command::new("EDF Scheduler")
         .version("1.0")
         .author("Your Name <your_email@example.com>")
         .about("Simulates EDF scheduling for task sets")
@@ -74,8 +74,92 @@ fn main() {
             .help("Task ordering based on utilization")
             .value_parser(["iu", "du"]))
 
-        .get_matches();
-    
+        .get_matches()
+}
+
+
+fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<Vec<Task>> {
+    if order == "du" {
+        tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
+    } else {
+        tasks.sort_by(|a, b| a.utilisation().partial_cmp(&b.utilisation()).unwrap_or(Ordering::Equal));
+    }
+
+    let mut partitions: Vec<Vec<Task>> = vec![Vec::new(); m];
+
+    match heuristic {
+        "ff" => {
+            for task in tasks.iter() {
+                for partition in partitions.iter_mut() {
+                    if partition.iter().map(|t| t.utilisation()).sum::<f64>() + task.utilisation() <= 1.0 {
+                        partition.push(task.clone());
+                        break;
+                    }
+                }
+            }
+        }
+        "nd" => {
+            let mut current_partition = 0;
+            for task in tasks.iter() {
+                if partitions[current_partition]
+                    .iter()
+                    .map(|t| t.utilisation())
+                    .sum::<f64>()
+                    + task.utilisation()
+                    > 1.0
+                {
+                    current_partition = (current_partition + 1) % m;
+                }
+                partitions[current_partition].push(task.clone());
+            }
+        }
+        "bf" => {
+            for task in tasks.iter() {
+                let mut best_partition: Option<usize> = None;
+                let mut min_slack = f64::MAX;
+
+                for (i, partition) in partitions.iter().enumerate() {
+                    let slack = 1.0 - partition.iter().map(|t| t.utilisation()).sum::<f64>();
+                    if slack >= task.utilisation() && slack < min_slack {
+                        best_partition = Some(i);
+                        min_slack = slack;
+                    }
+                }
+
+                if let Some(best) = best_partition {
+                    partitions[best].push(task.clone());
+                }
+            }
+        }
+        "wf" => {
+            for task in tasks.iter() {
+                let mut worst_partition: Option<usize> = None;
+                let mut max_slack = f64::MIN;
+
+                for (i, partition) in partitions.iter().enumerate() {
+                    let slack = 1.0 - partition.iter().map(|t| t.utilisation()).sum::<f64>();
+                    if slack >= task.utilisation() && slack > max_slack {
+                        worst_partition = Some(i);
+                        max_slack = slack;
+                    }
+                }
+
+                if let Some(worst) = worst_partition {
+                    partitions[worst].push(task.clone());
+                }
+            }
+        }
+        _ => panic!("Unknown heuristic"),
+    }
+
+    partitions
+}
+
+fn main() {
+    // cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
+    // example : cargo run taskset.txt 4 -v partitioned -w 8 -h ff -s iu
+    let matches:ArgMatches = parse_args();
+
     // Read tasks from file
     let taskset = match read_task_file(matches.get_one::<String>("task_file").unwrap()) {
         Ok(taskset) => taskset,
@@ -89,8 +173,7 @@ fn main() {
     let core_number = matches.get_one::<String>("m").unwrap();
     let worker_number = matches.get_one::<String>("workers").unwrap();
     let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
-
-    // println!("{:?}", version);
+    let sorting = matches.get_one::<String>("sorting").unwrap();
 
 
     let schedulable = simulation(taskset, 1);
