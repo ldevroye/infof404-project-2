@@ -1,19 +1,26 @@
 use clap::Error;
 
 use super::scheduler::Scheduler;
-use crate::{models::job, Job, TaskSet, TimeStep, ID};
+use crate::{Job, TaskSet, TimeStep, ID};
 
-pub struct EarliestDeadlineFirst;
+pub struct EDFpartition {
+    num_workers: usize,
+}
 
-impl Scheduler for EarliestDeadlineFirst {
-    fn schedule<'a>(&'a self, jobs: &'a mut Vec<Job>) -> Option<TimeStep> {
+impl Scheduler for EDFpartition {
+    fn new(num_workers: usize) -> Self { 
+        Self {
+            num_workers: num_workers
+        }
+    }
+    fn schedule<'a>(&'a self, jobs: &'a mut Vec<Job>) -> Option<ID> {
         if jobs.is_empty() {
             return None;
         }
 
         // Initialize with the absolute deadline of the first job in the list.
         let mut smallest = jobs[0].absolute_deadline();
-        let mut index_to_ret = 0;
+        let mut index_to_ret: ID = 0;
 
         // Iterate over the jobs to find the one with the earliest absolute deadline.
         let jobs_size = jobs.len();
@@ -21,7 +28,7 @@ impl Scheduler for EarliestDeadlineFirst {
             let current_deadline = jobs[i].absolute_deadline();
             if current_deadline < smallest {
                 smallest = current_deadline;
-                index_to_ret = i;
+                index_to_ret = i as ID;
             }
         }
 

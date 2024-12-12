@@ -2,7 +2,7 @@ use crate::task;
 
 use super::{Job, Task, TimeStep};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TaskSet {
     tasks: Vec<Task>,
 }
@@ -12,12 +12,16 @@ impl TaskSet {
         Self { tasks }
     }
 
+    pub fn new_empty() -> Self {
+        Self { tasks: Vec::new() }
+    }
+
     pub fn utilisation(&self) -> f64 {
         self.tasks.iter().map(|t| t.utilisation()).sum()
     }
 
-    pub fn is_feasible(&self, num_processor: u32) -> bool {
-        self.utilisation() <= num_processor as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
+    pub fn is_feasible(&self, num_workers: usize) -> bool {
+        self.utilisation() <= num_workers as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
     }
 
     pub fn is_empty(&self) -> bool {

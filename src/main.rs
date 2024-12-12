@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use std::cmp::Ordering;
 
 use multiprocessor::core::simulation;
-use multiprocessor::models::{task::Task, taskset::TaskSet, scheduler::{EarliestDeadlineFirst}};
+use multiprocessor::models::{Task, TaskSet};
 use multiprocessor::TimeStep;
 use multiprocessor::constants::{EDFVersion, Heuristic, Sorting};
 
@@ -92,7 +92,7 @@ fn parse_args() -> ArgMatches {
 /// A partition such that the ith vector of tasks is to be done by the ith processor
 /// 
 /// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
-fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<Vec<Task>> {
+fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<TaskSet> {
     if order == "du" {
         tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
     } else if order == "iu" {
@@ -101,14 +101,14 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
         panic!("Unknown sorting order")
     }
 
-    let mut partitions: Vec<Vec<Task>> = vec![Vec::new(); m]; // partition of each task per processor
+    let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m]; // partition of each task per processor
 
     match heuristic {
         "ff" => {
             for task in tasks.iter() {
                 for partition in partitions.iter_mut() {
                     if partition.iter().map(|t| t.utilisation()).sum::<f64>() + task.utilisation() <= 1.0 {
-                        partition.push(task.clone());
+                        partition.add_task(task.clone());
                         break;
                     }
                 }
@@ -126,7 +126,7 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
                 {
                     current_partition = (current_partition + 1) % m;
                 }
-                partitions[current_partition].push(task.clone());
+                partitions[current_partition].add_task(task.clone());
             }
         }
         "bf" => {
@@ -143,7 +143,7 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
                 }
 
                 if let Some(best) = best_partition {
-                    partitions[best].push(task.clone());
+                    partitions[best].add_task(task.clone());
                 }
             }
         }
@@ -161,7 +161,7 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
                 }
 
                 if let Some(worst) = worst_partition {
-                    partitions[worst].push(task.clone());
+                    partitions[worst].add_task(task.clone());
                 }
             }
         }
@@ -198,10 +198,11 @@ fn main() {
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(4);
-    let _worker_number = matches.get_one::<String>("workers").unwrap().parse::<usize>().unwrap_or(1);
+    let worker_number = matches.get_one::<String>("workers").unwrap().parse::<usize>().unwrap_or(1);
     let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
+    let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
 
     match version.as_str() {
         "partitioned" => {
@@ -217,7 +218,10 @@ fn main() {
             println!("Scheduled Tasks (EDF({:?})): {:#?}", version, scheduled_tasks);
         }
     }
-    let schedulable = simulation(taskset, 1);
+
+    println!("Taskset : {:#?}", taskset.get_tasks_mut());
+
+    let schedulable = simulation(partitions, worker_number);
         
     println!("{:?}", schedulable);
 
