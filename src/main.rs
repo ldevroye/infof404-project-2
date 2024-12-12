@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::process;
 use clap::{Command, Arg};
-use csv;
+use csv::ReaderBuilder;
 
 use multiprocessor::core::simulation;
 use multiprocessor::models::{task::Task, taskset::TaskSet, scheduler::{EarliestDeadlineFirst}};
@@ -11,15 +11,17 @@ use multiprocessor::constants::{EDFVersion, Heuristic, Sorting};
 
 /// Reads a task set file and returns a `TaskSet`
 pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
-    let mut rdr = csv::Reader::from_path(file_path)?;
+    let mut rdr = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
     let mut tasks = Vec::new();
 
     let mut id = 0;
 
     for result in rdr.records() {
         let record = result?;
+        println!("record : {:?}", record);
+
         let offset: TimeStep = record[0].parse()?;
-        let computation_time: TimeStep = record[1].trim().parse()?;;
+        let computation_time: TimeStep = record[1].trim().parse()?;
         let deadline: TimeStep = record[2].trim().parse()?;
         let period: TimeStep = record[3].trim().parse()?;
 
@@ -88,10 +90,11 @@ fn main() {
     let core_number = matches.get_one::<String>("m").unwrap();
     let worker_number = matches.get_one::<String>("workers").unwrap();
 
-    print!("{} {} {}", heuristic, core_number, worker_number);
-    let schedulable = simulation(taskset);
+    println!("taskset : {:#?}", taskset);
+
+    let schedulable = simulation(taskset, 1);
         
-    
+    print!("{:?}\n", schedulable);
 
     process::exit(schedulable as i32);
 }
