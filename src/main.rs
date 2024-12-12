@@ -78,14 +78,30 @@ fn parse_args() -> ArgMatches {
 }
 
 
+/// Partition the `n` tasks over `m` processors according the the `heuristic` to follow and the sorting `order`
+///
+/// # Arguments
+///
+/// * `task` - the set of tasks to partition of size n.
+/// * `m` - the number of available processors.
+/// * `heuristic` - the heuristic to fill the processors.
+/// * `order` - increasing of decreasing order of utilisation.
+///
+/// # Returns 
+///
+/// A partition such that the ith vector of tasks is to be done by the ith processor
+/// 
+/// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
 fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<Vec<Task>> {
     if order == "du" {
         tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
-    } else {
+    } else if order == "iu" {
         tasks.sort_by(|a, b| a.utilisation().partial_cmp(&b.utilisation()).unwrap_or(Ordering::Equal));
+    } else {
+        panic!("Unknown sorting order")
     }
 
-    let mut partitions: Vec<Vec<Task>> = vec![Vec::new(); m];
+    let mut partitions: Vec<Vec<Task>> = vec![Vec::new(); m]; // partition of each task per processor
 
     match heuristic {
         "ff" => {
@@ -161,7 +177,7 @@ fn main() {
     let matches:ArgMatches = parse_args();
 
     // Read tasks from file
-    let taskset = match read_task_file(matches.get_one::<String>("task_file").unwrap()) {
+    let mut taskset = match read_task_file(matches.get_one::<String>("task_file").unwrap()) {
         Ok(taskset) => taskset,
         Err(e) => {
             eprintln!("Error reading task file: {}", e);
@@ -171,10 +187,11 @@ fn main() {
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap();
-    let worker_number = matches.get_one::<String>("workers").unwrap();
-    let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
+    let _worker_number = matches.get_one::<String>("workers").unwrap();
+    let _version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
+    let partition = partition_tasks(taskset.get_tasks_mut(), core_number.parse::<usize>().unwrap(), &heuristic, &sorting);
 
     let schedulable = simulation(taskset, 1);
         

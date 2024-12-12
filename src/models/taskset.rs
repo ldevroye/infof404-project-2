@@ -34,4 +34,25 @@ impl TaskSet {
     pub fn iter(&self) -> std::slice::Iter<Task> {
         self.tasks.iter()
     }
+
+    /// Adds a new task to the task set.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to add.
+    pub fn add_task(&mut self, task: Task) {
+        self.tasks.push(task)
+    }
+
+    /// Returns a mutable reference to the vector of tasks in the task set.
+    pub fn get_tasks_mut(&mut self) -> &mut Vec<Task> {
+        &mut self.tasks
+    }
+
+    /// Returns the task at index i
+    pub fn get_task(&mut self, index: usize) -> Option<&Task> {
+        if index >= self.tasks.len() {return None;}
+
+        self.tasks.get(index)
+    }
 }
