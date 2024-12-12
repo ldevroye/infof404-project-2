@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::process;
+use std::{default, process};
 use clap::{Arg, ArgMatches, Command};
 use csv::ReaderBuilder;
 use rayon::prelude::*;
@@ -171,6 +171,17 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
     partitions
 }
 
+
+fn global_edf(tasks: &mut Vec<Task>, m: usize) -> Vec<Task> {
+    tasks.sort_by(|a, b| a.deadline().cmp(&b.deadline()));
+    tasks.iter().take(m).cloned().collect()
+}
+
+fn edf_k(tasks: &mut Vec<Task>, m: usize, k: usize) -> Vec<Task> {
+    tasks.sort_by(|a, b| a.deadline().cmp(&b.deadline()));
+    tasks.iter().take(k.min(m)).cloned().collect()
+}
+
 fn main() {
     // cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
     // example : cargo run taskset.txt 4 -v partitioned -w 8 -h ff -s iu
@@ -186,13 +197,26 @@ fn main() {
     };
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
-    let core_number = matches.get_one::<String>("m").unwrap();
-    let _worker_number = matches.get_one::<String>("workers").unwrap();
-    let _version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
+    let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(4);
+    let _worker_number = matches.get_one::<String>("workers").unwrap().parse::<usize>().unwrap_or(1);
+    let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    let partition = partition_tasks(taskset.get_tasks_mut(), core_number.parse::<usize>().unwrap(), &heuristic, &sorting);
 
+    match version.as_str() {
+        "partitioned" => {
+            let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+            println!("Partitions: {:#?}", partitions);
+        }
+        "global" => {
+            let scheduled_tasks = global_edf(taskset.get_tasks_mut(), core_number);
+            println!("Scheduled Tasks (Global EDF): {:#?}", scheduled_tasks);
+        }
+        _ => { // assume k is an integer if not the other two
+            let scheduled_tasks = edf_k(taskset.get_tasks_mut(), core_number, version.parse::<usize>().unwrap());
+            println!("Scheduled Tasks (EDF({:?})): {:#?}", version, scheduled_tasks);
+        }
+    }
     let schedulable = simulation(taskset, 1);
         
     println!("{:?}", schedulable);
