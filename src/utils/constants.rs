@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SchedulingCode {
     SchedulableSimulated = 0,
     SchedulableShortcut = 1,

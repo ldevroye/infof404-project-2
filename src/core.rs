@@ -3,19 +3,31 @@ use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-pub fn simulation(partition: Vec<TaskSet>, thread_number: usize) -> SchedulingCode {
+pub fn simulation(mut partition: Vec<TaskSet>, thread_number: usize) -> SchedulingCode {
     let processor_number = partition.len();
 
     let mut processor_done = 0 as usize;
     let mut thread_running = 0 as usize;
 
     // Allow parameters to another fn()
-    let partition = Arc::new(Mutex::new(partition));
+    //let partition_mutex = Arc::new(Mutex::new(partition));
 
     // Use Arc to share ownership of partition across threads
-    let threads: Arc<Mutex<Vec<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(vec![]));
+    //let threads_mutex: Arc<Mutex<Vec<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(vec![]));
 
     while processor_done < processor_number {
+        let taskset = partition.get_mut(processor_done).unwrap();
+        let resp = simulate(taskset);
+        
+        if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) {
+            println!("Taskset not schedulable");
+            return resp;
+        }
+
+        processor_done += 1;
+    }
+
+        /* 
         {
             let mut threads_lock = threads.lock().unwrap();
 
@@ -54,12 +66,14 @@ pub fn simulation(partition: Vec<TaskSet>, thread_number: usize) -> SchedulingCo
             // If max threads are running, wait a bit
             thread::sleep(std::time::Duration::from_millis(100));
         }
+        
     }
 
     // Wait for all threads to complete
     for handle in Arc::try_unwrap(threads).unwrap().into_inner().unwrap() {
         handle.join().unwrap();
     }
+    */
 
     SchedulingCode::SchedulableSimulated
 }
