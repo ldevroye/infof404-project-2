@@ -11,7 +11,7 @@ pub struct Partition {
 
 /// Used to access Partition[index] -> returns self.partition[index]
 impl Index<usize> for Partition {
-    type Output = TaskSet;  // The type returned when indexed
+    type Output = TaskSet;
 
     fn index(&self, index: usize) -> &Self::Output {
         // Return a reference to the n-th element in the partition
@@ -19,6 +19,7 @@ impl Index<usize> for Partition {
     }
 }
 
+/// Used to access mut Partition[index] -> returns mut self.partition[index]
 impl IndexMut<usize> for Partition {
 
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
@@ -47,20 +48,18 @@ impl Partition {
         self.partition.get(index)
     }
 
-    
-
     pub fn processor_number(&self) -> usize {
         self.partition.len()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut TaskSet> { // iter_mut over partition
+    /// iter_mut over partition
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut TaskSet> { 
         self.partition.iter_mut() 
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &TaskSet> { // iter over partition
+    /// iter over partition
+    pub fn iter(&self) -> impl Iterator<Item = &TaskSet> { 
         self.partition.iter()  
     }
 
-    // Implementing the Index trait for Partition
-    
 }

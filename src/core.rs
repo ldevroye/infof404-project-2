@@ -66,7 +66,7 @@ pub fn simulation(mut partition: Partition, thread_number: usize) -> SchedulingC
 
 fn simulate<'a>(taskset: &'a mut TaskSet) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
-
+    println!("ok?");
     if taskset.is_empty() {
         return SchedulingCode::SchedulableShortcut;
     }
@@ -99,6 +99,7 @@ fn simulate<'a>(taskset: &'a mut TaskSet) -> SchedulingCode {
         // Clone the job to be scheduled to avoid multiple mutable borrows
         if let Some(index_elected) = scheduler.schedule(&mut queue){
             if let Some(elected) = queue.get_mut(index_elected as usize) {
+                println!("wow");
                 elected.schedule(1);
             }
         }
