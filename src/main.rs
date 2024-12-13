@@ -5,6 +5,7 @@ use csv::ReaderBuilder;
 use clap::ArgMatches;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::thread::available_parallelism;
 
 use multiprocessor::core::simulation;
 use multiprocessor::{Task, TaskSet, TimeStep, Worker, ID};
@@ -200,10 +201,12 @@ fn main() {
             process::exit(2);
         }
     };
+    
+    let default_parallelism_approx = available_parallelism().unwrap().get() as u32;
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
-    let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(4);
-    let worker_number = matches.get_one::<String>("workers").unwrap().parse::<ID>().unwrap_or(1);
+    let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(1); // processors for the simulation
+    let worker_number = matches.get_one::<String>("workers").unwrap().parse::<ID>().unwrap_or(default_parallelism_approx); // nbr threads
     let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
     let sorting = matches.get_one::<String>("sorting").unwrap();
 

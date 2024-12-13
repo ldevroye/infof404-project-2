@@ -1,8 +1,16 @@
 use crate::{scheduler, Job, SchedulingCode, TaskSet, Task, ID};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
+use std::thread;
 
 pub fn simulation(mut taskset: TaskSet, num_workers: ID) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
+    
+    
+    let thread_join_handle = thread::spawn(move || {
+        // some work here
+    });
+    // some work here
+    let res = thread_join_handle.join();
 
 
     if taskset.is_empty() {
