@@ -1,6 +1,6 @@
 
 use std::collections::HashMap;
-use super::{TimeStep, ID};
+use super::ID;
 
 #[derive(Debug)]
 pub struct Worker {

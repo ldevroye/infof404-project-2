@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::thread::available_parallelism;
 
 use multiprocessor::core::simulation;
-use multiprocessor::{Task, TaskSet, TimeStep, Worker, ID, Partition};
+use multiprocessor::{Task, TaskSet, TimeStep, Worker, Partition};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -209,7 +209,7 @@ fn main() {
     let version = matches.get_one::<String>("version").unwrap();
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    let mut partitions: Partition = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+    let partitions: Partition = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
     let workers: Vec<Worker> = (1..=core_number)
                             .map(|id| Worker::new(id as u32, HashMap::new()))
                             .collect();

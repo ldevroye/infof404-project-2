@@ -1,9 +1,9 @@
-use crate::{scheduler, taskset, Job, Partition, SchedulingCode, Task, TaskSet, ID};
+use crate::{Job, Partition, SchedulingCode, TaskSet};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-pub fn simulation(mut partition: Partition, thread_number: usize) -> SchedulingCode {
+pub fn simulation(partition: Partition, thread_number: usize) -> SchedulingCode {
     let processor_number = partition.processor_number();
 
     let mut processor_done = 0 as usize;
