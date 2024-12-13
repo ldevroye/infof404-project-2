@@ -1,47 +1,51 @@
-use crate::{SchedulingCode, TaskSet};
+use crate::{scheduler, Job, SchedulingCode, TaskSet, Task};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 
-pub fn simulation(mut taskset: TaskSet, num_processor: u32) -> SchedulingCode {
+pub fn simulation(mut partition: Vec<TaskSet>, num_workers: usize) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
-
-    if taskset.is_empty() {
-        println!("empty");
-        return SchedulingCode::SchedulableShortcut;
-    }
-
-    if !taskset.is_feasible(num_processor) {
-        println!("stop feasible");
-        return SchedulingCode::UnschedulableShortcut
-    }
     
-    if scheduler.checking_schedulability() {
-        if scheduler.schedulability_proven(&taskset) {
+    for mut taskset in partition {
+
+        if taskset.is_empty() {
             return SchedulingCode::SchedulableShortcut;
-        } else {
-            return SchedulingCode::UnschedulableShortcut;
         }
-    }
 
-    let mut queue = Vec::new();
-    let feasibility_interval = scheduler.feasibility_interval(&taskset).1;
-    
-    for t in 0..feasibility_interval {
-        // Release new jobs at time `t`
-        queue.extend(taskset.release_jobs(t));
+        if !taskset.is_feasible(num_workers) {
+            return SchedulingCode::UnschedulableShortcut
+        }
         
-        // Check for missed deadlines
-        if queue.iter().any(|job| job.deadline_missed(t)) {
-            return SchedulingCode::UnschedulableSimulated;
+        if scheduler.checking_schedulability() { // TODO check ?
+            if scheduler.schedulability_proven(&taskset) {
+                return SchedulingCode::SchedulableShortcut;
+            } else {
+                return SchedulingCode::UnschedulableShortcut;
+            }
         }
 
-        // Clone the job to be scheduled to avoid multiple mutable borrows
-        if let Some(elected) = scheduler.schedule(&mut queue) {
-            elected.schedule(1);
-        }
+        let mut queue: Vec<Job> = Vec::new();
+        let feasibility_interval = scheduler.feasibility_interval(&taskset).1;
+        
+        for t in 0..feasibility_interval {
+            // Try to release new jobs at time `t`
+            queue.extend(taskset.release_jobs(t));
+            
+            // Check for missed deadlines
+            if queue.iter().any(|job| job.deadline_missed(t)) {
+                println!("time {:?}", t);
+                return SchedulingCode::UnschedulableSimulated;
+            }
 
-        // Filter out completed jobs
-        queue = queue.into_iter().filter(|job| !job.is_complete()).collect();
+            // Clone the job to be scheduled to avoid multiple mutable borrows
+            if let Some(index_elected) = scheduler.schedule(&mut queue){
+                if let Some(elected) = queue.get_mut(index_elected as usize) {
+                    elected.schedule(1);
+                }
+            }
+        
+
+            // Filter out completed jobs
+            queue = queue.into_iter().filter(|job| !job.is_complete()).collect();
+        }
     }
-
     SchedulingCode::SchedulableSimulated
 }
