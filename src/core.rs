@@ -80,14 +80,16 @@ pub fn simulation(mut partition: Vec<TaskSet>, thread_number: usize) -> Scheduli
 
 fn simulate<'a>(taskset: &'a mut TaskSet) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
-    println!("ok?");
+
     if taskset.is_empty() {
         return SchedulingCode::SchedulableShortcut;
     }
 
-    if !taskset.is_feasible(1) {
+    
+    if !taskset.is_feasible() {
         return SchedulingCode::UnschedulableShortcut
     }
+
     
     if scheduler.checking_schedulability() { // TODO check ?
         if scheduler.schedulability_proven(&taskset) {
@@ -96,7 +98,7 @@ fn simulate<'a>(taskset: &'a mut TaskSet) -> SchedulingCode {
             return SchedulingCode::UnschedulableShortcut;
         }
     }
-
+    
     let mut queue: Vec<Job> = Vec::new();
     let feasibility_interval = scheduler.feasibility_interval(&taskset).1;
     
@@ -113,7 +115,6 @@ fn simulate<'a>(taskset: &'a mut TaskSet) -> SchedulingCode {
         // Clone the job to be scheduled to avoid multiple mutable borrows
         if let Some(index_elected) = scheduler.schedule(&mut queue){
             if let Some(elected) = queue.get_mut(index_elected as usize) {
-                println!("wow");
                 elected.schedule(1);
             }
         }

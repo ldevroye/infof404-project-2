@@ -19,8 +19,9 @@ impl TaskSet {
         self.tasks.iter().map(|t| t.utilisation()).sum()
     }
 
-    pub fn is_feasible(&self, processor_num: ID) -> bool {
-        self.utilisation() <= processor_num as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
+    pub fn is_feasible(&self) -> bool {
+        self.utilisation() <= 1 as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
+        
     }
 
     pub fn is_empty(&self) -> bool {
@@ -58,6 +59,10 @@ impl TaskSet {
 
     pub fn get_tasks_copy(self) -> Vec<Task> {
         self.tasks
+    }
+
+    pub fn len(&self) -> usize {
+        self.tasks.len()
     }
 
 

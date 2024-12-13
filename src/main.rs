@@ -1,5 +1,6 @@
 use std::error::Error;
-use std::process;
+use std::process::exit;
+use std::{iter, process};
 use clap::{Command, Arg};
 use csv::ReaderBuilder;
 use clap::ArgMatches;
@@ -8,7 +9,7 @@ use std::collections::HashMap;
 use std::thread::available_parallelism;
 
 use multiprocessor::core::simulation;
-use multiprocessor::{partition, Partition, Task, TaskSet, TimeStep, Worker};
+use multiprocessor::{partition, Partition, SchedulingCode, Task, TaskSet, TimeStep, Worker};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -20,7 +21,6 @@ pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
 
     for result in rdr.records() {
         let record = result?;
-        println!("record : {:?}", record);
 
         let offset: TimeStep = record[0].parse()?;
         let computation_time: TimeStep = record[1].trim().parse()?;
@@ -103,7 +103,7 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
 
     //let mut partitions: Partition = Partition::new(m); // partition of each task per worker
     let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m];
-    
+    let num_task = tasks.len();
     match heuristic {
         "ff" => {
             for task in tasks.iter() {
@@ -173,6 +173,13 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
         _ => panic!("Unknown heuristic"),
     }
 
+    let num_task_computed:usize = partitions.iter().map(|taskset| taskset.len()).sum();
+
+    if num_task > num_task_computed {
+        eprintln!("Too much task ({:?}, {:?} attached to a processor) for the {:?} processors", num_task, num_task_computed, m);
+        println!("{:#?}", partitions);
+        exit(SchedulingCode::UnschedulableShortcut as i32)
+    }
     partitions
 }
 
@@ -211,10 +218,10 @@ fn main() {
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
     let partitions: Vec<TaskSet> = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
-    let workers: Vec<Worker> = (1..=core_number)
+    let cores: Vec<Worker> = (1..=core_number)
                             .map(|id| Worker::new(id as u32))
                             .collect();
-
+ 
                             
     match version.as_str() {
         "partitioned" => {
@@ -231,7 +238,7 @@ fn main() {
         }
     }
 
-    println!("Taskset : {:#?}", taskset.get_tasks_mut());
+    //println!("Taskset : {:#?}", taskset.get_tasks_mut());
 
     let schedulable = simulation(partitions, thread_number);
         
