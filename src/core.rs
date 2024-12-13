@@ -3,13 +3,16 @@ use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-pub fn simulation(partition: &mut Partition, thread_number: usize) -> SchedulingCode {
+pub fn simulation(mut partition: Partition, thread_number: usize) -> SchedulingCode {
     let processor_number = partition.processor_number();
 
     let mut processor_done = 0 as usize;
     let mut thread_running = 0 as usize;
 
-    // Specify the type for Mutex to avoid inference issues
+    // Allow parameters to another fn()
+    let partition = Arc::new(Mutex::new(partition));
+
+    // Use Arc to share ownership of partition across threads
     let threads: Arc<Mutex<Vec<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(vec![]));
 
     while processor_done < processor_number {
@@ -17,7 +20,7 @@ pub fn simulation(partition: &mut Partition, thread_number: usize) -> Scheduling
             let mut threads_lock = threads.lock().unwrap();
 
             // Check if any thread has completed
-            threads_lock.retain(|handle: _| {
+            threads_lock.retain(|handle| {
                 if handle.is_finished() {
                     thread_running -= 1;
                     false // Remove finished thread from the list
@@ -28,17 +31,20 @@ pub fn simulation(partition: &mut Partition, thread_number: usize) -> Scheduling
         }
 
         if thread_running < thread_number {
-            // Spawn a new thread
-            let threads_clone = Arc::clone(&threads);
+            // Clone the Arc for each new thread
+            let partition_clone = Arc::clone(&partition);
+
             let handle = thread::spawn(move || {
+                // Lock the partition inside the thread to safely access it
+                let mut partition_lock = partition_clone.lock().unwrap();
+                let taskset = partition_lock.get_mut(processor_done).unwrap();
                 println!("Processor {} is running.", processor_done + 1);
-                let taskset = partition.get(processor_done).unwrap();
-                simulate(taskset); // Simulate processing
+                simulate(taskset); // Simulate processing of each processor
                 println!("Processor {} is done.", processor_done + 1);
             });
 
             {
-                let mut threads_lock = threads_clone.lock().unwrap();
+                let mut threads_lock = threads.lock().unwrap();
                 threads_lock.push(handle);
             }
 
@@ -58,7 +64,7 @@ pub fn simulation(partition: &mut Partition, thread_number: usize) -> Scheduling
     SchedulingCode::SchedulableSimulated
 }
 
-fn simulate(taskset: &mut TaskSet) -> SchedulingCode {
+fn simulate<'a>(taskset: &'a mut TaskSet) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
 
     if taskset.is_empty() {

@@ -201,15 +201,15 @@ fn main() {
             process::exit(2);
         }
     };
-    let default_parallelism_approx = available_parallelism().unwrap().get() as u32;
+    let default_parallelism_approx = available_parallelism().unwrap().get();
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(1); // processors for the simulation
-    let thread_number = matches.get_one::<String>("workers").unwrap().parse::<ID>().unwrap_or(default_parallelism_approx); // nbr threads
+    let thread_number = matches.get_one::<String>("workers").unwrap().parse::<usize>().unwrap_or(default_parallelism_approx); // nbr threads
     let version = matches.get_one::<String>("version").unwrap();
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    let &mut partitions: Partition = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+    let mut partitions: Partition = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
     let workers: Vec<Worker> = (1..=core_number)
                             .map(|id| Worker::new(id as u32, HashMap::new()))
                             .collect();
