@@ -1,7 +1,7 @@
-use crate::{scheduler, Job, SchedulingCode, TaskSet, Task};
+use crate::{scheduler, Job, SchedulingCode, TaskSet, Task, ID};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 
-pub fn simulation(mut taskset: TaskSet, num_workers: usize) -> SchedulingCode {
+pub fn simulation(mut taskset: TaskSet, num_workers: ID) -> SchedulingCode {
     let scheduler = EarliestDeadlineFirst;
 
 

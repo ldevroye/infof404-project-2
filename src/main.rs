@@ -91,6 +91,7 @@ pub fn build_cli_command() -> Command {
 /// 
 /// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
 fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<TaskSet> {
+
     if order == "du" {
         tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
     } else if order == "iu" {
@@ -99,14 +100,18 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
         panic!("Unknown sorting order")
     }
 
-    let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m]; // partition of each task per processor
+    let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m]; // partition of each task per worker
 
     match heuristic {
         "ff" => {
             for task in tasks.iter() {
-                for partition in partitions.iter_mut() {
-                    if partition.iter().map(|t| t.utilisation()).sum::<f64>() + task.utilisation() <= 1.0 {
-                        partition.add_task(task.clone());
+                for task_set in partitions.iter_mut() {
+                    if task_set
+                    .iter()
+                    .map(|t| t.utilisation())
+                    .sum::<f64>() + task.utilisation()
+                     <= 1.0 {
+                        task_set.add_task(task.clone());
                         break;
                     }
                 }
@@ -132,8 +137,8 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
                 let mut best_partition: Option<usize> = None;
                 let mut min_slack = f64::MAX;
 
-                for (i, partition) in partitions.iter().enumerate() {
-                    let slack = 1.0 - partition.iter().map(|t| t.utilisation()).sum::<f64>();
+                for (i, task_set) in partitions.iter().enumerate() {
+                    let slack = 1.0 - task_set.iter().map(|t| t.utilisation()).sum::<f64>();
                     if slack >= task.utilisation() && slack < min_slack {
                         best_partition = Some(i);
                         min_slack = slack;
@@ -150,8 +155,8 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
                 let mut worst_partition: Option<usize> = None;
                 let mut max_slack = f64::MIN;
 
-                for (i, partition) in partitions.iter().enumerate() {
-                    let slack = 1.0 - partition.iter().map(|t| t.utilisation()).sum::<f64>();
+                for (i, task_set) in partitions.iter().enumerate() {
+                    let slack = 1.0 - task_set.iter().map(|t| t.utilisation()).sum::<f64>();
                     if slack >= task.utilisation() && slack > max_slack {
                         worst_partition = Some(i);
                         max_slack = slack;
@@ -198,12 +203,12 @@ fn main() {
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(4);
-    let worker_number = matches.get_one::<String>("workers").unwrap().parse::<usize>().unwrap_or(1);
+    let worker_number = matches.get_one::<String>("workers").unwrap().parse::<ID>().unwrap_or(1);
     let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
     let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
-    let workers: Vec<Worker> = (1..=worker_number as ID)
+    let workers: Vec<Worker> = (1..=worker_number)
                             .map(|id| Worker::new(id, HashMap::new()))
                             .collect();
 

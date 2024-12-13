@@ -1,6 +1,6 @@
 use crate::task;
 
-use super::{Job, Task, TimeStep};
+use super::{Job, Task, TimeStep, ID};
 
 #[derive(Debug, Clone)]
 pub struct TaskSet {
@@ -20,7 +20,7 @@ impl TaskSet {
         self.tasks.iter().map(|t| t.utilisation()).sum()
     }
 
-    pub fn is_feasible(&self, num_workers: usize) -> bool {
+    pub fn is_feasible(&self, num_workers: ID) -> bool {
         self.utilisation() <= num_workers as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
     }
 

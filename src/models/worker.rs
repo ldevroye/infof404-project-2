@@ -16,10 +16,19 @@ impl Worker {
         }
     }
 
+
+    /// Add or increment the value of the task_id
+    /// 
+    /// # Arguments
+    /// 
+    /// * 'tas'
     pub fn migrate(&mut self, task_id: ID) {
-        self.map_task.entry(task_id).and_modify(|v| *v += 1).or_insert(1);
+        self.map_task.entry(task_id)
+        .and_modify(|v| *v += 1)
+        .or_insert(1);
     }
 
+    /// Get all the migrations done
     pub fn get_migrations(&self) -> usize {
         self.map_task.values().sum()
     }
