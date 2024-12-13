@@ -56,6 +56,11 @@ impl TaskSet {
         &self.tasks
     }
 
+    pub fn get_tasks_copy(self) -> Vec<Task> {
+        self.tasks
+    }
+
+
     /// Returns the task at index i
     pub fn get_task(&mut self, index: usize) -> Option<&Task> {
         if index >= self.tasks.len() {return None;}

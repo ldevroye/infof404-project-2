@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::thread::available_parallelism;
 
 use multiprocessor::core::simulation;
-use multiprocessor::{Task, TaskSet, TimeStep, Worker, Partition};
+use multiprocessor::{partition, Partition, Task, TaskSet, TimeStep, Worker};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -91,7 +91,7 @@ pub fn build_cli_command() -> Command {
 /// A partition such that the ith vector of tasks is to be done by the ith processor
 /// 
 /// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
-fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Partition {
+fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<TaskSet> {
 
     if order == "du" {
         tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
@@ -101,8 +101,9 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
         panic!("Unknown sorting order")
     }
 
-    let mut partitions: Partition = Partition::new(m); // partition of each task per worker
-
+    //let mut partitions: Partition = Partition::new(m); // partition of each task per worker
+    let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m];
+    
     match heuristic {
         "ff" => {
             for task in tasks.iter() {
@@ -209,9 +210,9 @@ fn main() {
     let version = matches.get_one::<String>("version").unwrap();
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    let partitions: Partition = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+    let partitions: Vec<TaskSet> = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
     let workers: Vec<Worker> = (1..=core_number)
-                            .map(|id| Worker::new(id as u32, HashMap::new()))
+                            .map(|id| Worker::new(id as u32))
                             .collect();
 
                             

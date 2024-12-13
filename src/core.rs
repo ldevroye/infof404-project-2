@@ -3,8 +3,8 @@ use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 use std::thread;
 use std::sync::{Arc, Mutex};
 
-pub fn simulation(partition: Partition, thread_number: usize) -> SchedulingCode {
-    let processor_number = partition.processor_number();
+pub fn simulation(partition: Vec<TaskSet>, thread_number: usize) -> SchedulingCode {
+    let processor_number = partition.len();
 
     let mut processor_done = 0 as usize;
     let mut thread_running = 0 as usize;
