@@ -4,10 +4,10 @@ use clap::{Command, Arg};
 use csv::ReaderBuilder;
 use clap::ArgMatches;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use multiprocessor::core::simulation;
-use multiprocessor::models::{task::Task, taskset::TaskSet};
-use multiprocessor::TimeStep;
+use multiprocessor::{Task, TaskSet, TimeStep, Worker, ID};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -184,7 +184,7 @@ fn edf_k(tasks: &mut Vec<Task>, m: usize, k: usize) -> Vec<Task> {
     
 fn main() {
     // cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
-    // example : cargo run taskset.txt 4 -v partitioned -w 8 -h ff -s iu
+    // example : cargo run test.csv 4 -v partitioned -w 8 -h ff -s iu
     let matches:ArgMatches = build_cli_command().get_matches();
 
     // Read tasks from file
@@ -203,6 +203,10 @@ fn main() {
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
     let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+    let workers: Vec<Worker> = (1..=worker_number as ID)
+                            .map(|id| Worker::new(id, HashMap::new()))
+                            .collect();
+
 
     match version.as_str() {
         "partitioned" => {
@@ -221,7 +225,7 @@ fn main() {
 
     println!("Taskset : {:#?}", taskset.get_tasks_mut());
 
-    let schedulable = simulation(partitions, worker_number);
+    let schedulable = simulation(taskset, worker_number);
         
     println!("{:?}", schedulable);
 
