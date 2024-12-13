@@ -10,6 +10,10 @@ impl TaskSet {
         Self { tasks }
     }
 
+    pub fn get_tasks(&self) -> &Vec<Task> {
+        &self.tasks
+    }
+
     pub fn utilisation(&self) -> f64 {
         self.tasks.iter().map(|t| t.utilisation()).sum()
     }

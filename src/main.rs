@@ -99,3 +99,76 @@ fn main() {
 
     process::exit(schedulable as i32);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use read_task_file;
+
+    #[test]
+    fn test_read_task_file_valid() {
+        let task_file_content = "\
+            0, 20, 40, 50\n\
+            10, 80, 200, 200";
+        let file_path = "test_tasks.csv";
+
+        std::fs::write(file_path, task_file_content).expect("Unable to write test file");
+
+        let taskset = read_task_file(&file_path.to_string()).expect("Failed to read task set");
+        let task = &taskset.get_tasks()[0];
+
+        assert_eq!(taskset.get_tasks().len(), 2);
+        assert_eq!(task.offset(), 0);
+        assert_eq!(task.wcet(), 20);
+        assert_eq!(task.deadline(), 40);
+        assert_eq!(task.period(), 50);
+
+        std::fs::remove_file(file_path).expect("Failed to clean up test file");
+    }
+
+    #[test]
+    fn test_read_task_file_invalid_format() {
+        let task_file_content = "Invalid, Data";
+        let file_path = "test_invalid.csv";
+
+        std::fs::write(file_path, task_file_content).expect("Unable to write test file");
+
+        let result = read_task_file(&file_path.to_string());
+        assert!(result.is_err());
+
+        std::fs::remove_file(file_path).expect("Failed to clean up test file");
+    }
+
+    #[test]
+    fn test_command_line_arguments() {
+        let matches = build_cli_command().try_get_matches_from(vec![
+            "edf_scheduler",
+            "tasks.csv",
+            "4",
+            "-v",
+            "global",
+            "-w",
+            "8",
+        ]);
+
+        assert!(matches.is_ok());
+        let matches = matches.unwrap();
+
+        assert_eq!(
+            matches.get_one::<String>("task_file").unwrap(),
+            "tasks.csv"
+        );
+        assert_eq!(
+            *matches.get_one::<String>("m").unwrap(),
+            "4"
+        );
+        assert_eq!(
+            matches.get_one::<String>("version").unwrap(),
+            "global"
+        );
+        assert_eq!(
+            *matches.get_one::<String>("workers").unwrap(),
+            "8"
+        );
+    }
+}
