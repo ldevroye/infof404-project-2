@@ -4,10 +4,8 @@ use clap::{Command, Arg};
 use csv::ReaderBuilder;
 
 use multiprocessor::core::simulation;
-use multiprocessor::models::{task::Task, taskset::TaskSet, scheduler::{EarliestDeadlineFirst}};
+use multiprocessor::models::{task::Task, taskset::TaskSet};
 use multiprocessor::TimeStep;
-use multiprocessor::constants::{EDFVersion, Heuristic, Sorting};
-
 
 /// Reads a task set file and returns a `TaskSet`
 pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
@@ -86,9 +84,9 @@ fn main() {
         }
     };
 
-    let heuristic = matches.get_one::<String>("heuristic").unwrap();
-    let core_number = matches.get_one::<String>("m").unwrap();
-    let worker_number = matches.get_one::<String>("workers").unwrap();
+    let _heuristic = matches.get_one::<String>("heuristic").unwrap();
+    let _core_number = matches.get_one::<String>("m").unwrap();
+    let _worker_number = matches.get_one::<String>("workers").unwrap();
 
     println!("taskset : {:#?}", taskset);
 

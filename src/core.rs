@@ -1,4 +1,4 @@
-use crate::{scheduler, SchedulingCode, TaskSet};
+use crate::{SchedulingCode, TaskSet};
 use crate::scheduler::{EarliestDeadlineFirst, Scheduler};
 
 pub fn simulation(mut taskset: TaskSet, num_processor: u32) -> SchedulingCode {
