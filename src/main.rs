@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::thread::available_parallelism;
 
 use multiprocessor::core::simulation;
-use multiprocessor::{Task, TaskSet, TimeStep, Worker, ID};
+use multiprocessor::{Task, TaskSet, TimeStep, Worker, ID, Partition};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -91,7 +91,7 @@ pub fn build_cli_command() -> Command {
 /// A partition such that the ith vector of tasks is to be done by the ith processor
 /// 
 /// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
-fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<TaskSet> {
+fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Partition {
 
     if order == "du" {
         tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
@@ -101,7 +101,7 @@ fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str
         panic!("Unknown sorting order")
     }
 
-    let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m]; // partition of each task per worker
+    let mut partitions: Partition = Partition::new(m); // partition of each task per worker
 
     match heuristic {
         "ff" => {
@@ -201,21 +201,20 @@ fn main() {
             process::exit(2);
         }
     };
-    
     let default_parallelism_approx = available_parallelism().unwrap().get() as u32;
 
     let heuristic = matches.get_one::<String>("heuristic").unwrap();
     let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(1); // processors for the simulation
-    let worker_number = matches.get_one::<String>("workers").unwrap().parse::<ID>().unwrap_or(default_parallelism_approx); // nbr threads
-    let version = matches.get_one::<String>("version").unwrap(); // TODO use cores, version heuristic & workers
+    let thread_number = matches.get_one::<String>("workers").unwrap().parse::<ID>().unwrap_or(default_parallelism_approx); // nbr threads
+    let version = matches.get_one::<String>("version").unwrap();
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
-    let workers: Vec<Worker> = (1..=worker_number)
-                            .map(|id| Worker::new(id, HashMap::new()))
+    let &mut partitions: Partition = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+    let workers: Vec<Worker> = (1..=core_number)
+                            .map(|id| Worker::new(id as u32, HashMap::new()))
                             .collect();
 
-
+                            
     match version.as_str() {
         "partitioned" => {
             let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
@@ -233,7 +232,7 @@ fn main() {
 
     println!("Taskset : {:#?}", taskset.get_tasks_mut());
 
-    let schedulable = simulation(taskset, worker_number);
+    let schedulable = simulation(partitions, thread_number);
         
     println!("{:?}", schedulable);
 
