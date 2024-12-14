@@ -4,12 +4,13 @@ use std::{iter, process};
 use clap::{Command, Arg};
 use csv::ReaderBuilder;
 use clap::ArgMatches;
+use multiprocessor::constants::EDFVersion;
+use multiprocessor::scheduler::Scheduler;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::thread::available_parallelism;
 
-use multiprocessor::core::simulation;
-use multiprocessor::{partition, Partition, SchedulingCode, Task, TaskSet, TimeStep, Worker};
+use multiprocessor::{partition, Partition, SchedulingCode, Task, TaskSet, TimeStep, Core};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -91,97 +92,7 @@ pub fn build_cli_command() -> Command {
 /// A partition such that the ith vector of tasks is to be done by the ith processor
 /// 
 /// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
-fn partition_tasks(tasks: &mut Vec<Task>, m: usize, heuristic: &str, order: &str) -> Vec<TaskSet> {
 
-    if order == "du" {
-        tasks.sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
-    } else if order == "iu" {
-        tasks.sort_by(|a, b| a.utilisation().partial_cmp(&b.utilisation()).unwrap_or(Ordering::Equal));
-    } else {
-        panic!("Unknown sorting order")
-    }
-
-    //let mut partitions: Partition = Partition::new(m); // partition of each task per worker
-    let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); m];
-    let num_task = tasks.len();
-    match heuristic {
-        "ff" => {
-            for task in tasks.iter() {
-                for task_set in partitions.iter_mut() {
-                    if task_set
-                    .iter()
-                    .map(|t| t.utilisation())
-                    .sum::<f64>() + task.utilisation()
-                     <= 1.0 {
-                        task_set.add_task(task.clone());
-                        break;
-                    }
-                }
-            }
-        }
-        "nd" => {
-            let mut current_partition = 0;
-            for task in tasks.iter() {
-                if partitions[current_partition]
-                    .iter()
-                    .map(|t| t.utilisation())
-                    .sum::<f64>()
-                    + task.utilisation()
-                    > 1.0
-                {
-                    current_partition = (current_partition + 1) % m;
-                }
-                partitions[current_partition].add_task(task.clone());
-            }
-        }
-        "bf" => {
-            for task in tasks.iter() {
-                let mut best_partition: Option<usize> = None;
-                let mut min_slack = f64::MAX;
-
-                for (i, task_set) in partitions.iter().enumerate() {
-                    let slack = 1.0 - task_set.iter().map(|t| t.utilisation()).sum::<f64>();
-                    if slack >= task.utilisation() && slack < min_slack {
-                        best_partition = Some(i);
-                        min_slack = slack;
-                    }
-                }
-
-                if let Some(best) = best_partition {
-                    partitions[best].add_task(task.clone());
-                }
-            }
-        }
-        "wf" => {
-            for task in tasks.iter() {
-                let mut worst_partition: Option<usize> = None;
-                let mut max_slack = f64::MIN;
-
-                for (i, task_set) in partitions.iter().enumerate() {
-                    let slack = 1.0 - task_set.iter().map(|t| t.utilisation()).sum::<f64>();
-                    if slack >= task.utilisation() && slack > max_slack {
-                        worst_partition = Some(i);
-                        max_slack = slack;
-                    }
-                }
-
-                if let Some(worst) = worst_partition {
-                    partitions[worst].add_task(task.clone());
-                }
-            }
-        }
-        _ => panic!("Unknown heuristic"),
-    }
-
-    let num_task_computed:usize = partitions.iter().map(|taskset| taskset.len()).sum();
-
-    if num_task > num_task_computed {
-        eprintln!("Too much task ({:?}, {:?} attached to a processor) for the {:?} processors", num_task, num_task_computed, m);
-        println!("{:#?}", partitions);
-        exit(SchedulingCode::UnschedulableShortcut as i32)
-    }
-    partitions
-}
 
 
 fn global_edf(tasks: &mut Vec<Task>, m: usize) -> Vec<Task> {
@@ -217,30 +128,31 @@ fn main() {
     let version = matches.get_one::<String>("version").unwrap();
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    let partitions: Vec<TaskSet> = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
-    let cores: Vec<Worker> = (1..=core_number)
+    //let partitions: Vec<TaskSet> = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
+    /*let cores: Vec<Worker> = (1..=core_number)
                             .map(|id| Worker::new(id as u32))
                             .collect();
- 
-                            
+    */
+    println!("Taskset : {:#?}", taskset.get_tasks());
+
+    let mut scheduler: Scheduler = Scheduler::new(taskset, core_number, thread_number, heuristic.clone(), sorting.clone());          
     match version.as_str() {
         "partitioned" => {
-            let partitions = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
-            println!("Partitions: {:#?}", partitions);
+            scheduler.set_version(EDFVersion::Partitioned);
+            println!("Partitioned");
         }
         "global" => {
-            let scheduled_tasks = global_edf(taskset.get_tasks_mut(), core_number);
-            println!("Scheduled Tasks (Global EDF): {:#?}", scheduled_tasks);
+            scheduler.set_version(EDFVersion::Global);
+            println!("Schedule Tasks (Global EDF)");
         }
         _ => { // assume k is an integer if not the other two
-            let scheduled_tasks = edf_k(taskset.get_tasks_mut(), core_number, version.parse::<usize>().unwrap());
-            println!("Scheduled Tasks (EDF({:?})): {:#?}", version, scheduled_tasks);
+            scheduler.set_version(EDFVersion::EDFk(version.parse::<usize>().unwrap()));
+            println!("Schedule Tasks (EDF({:?}))", version);
         }
     }
 
-    //println!("Taskset : {:#?}", taskset.get_tasks_mut());
 
-    let schedulable = simulation(partitions, thread_number);
+    let schedulable = scheduler.test_task_set();
         
     println!("{:?}", schedulable);
 

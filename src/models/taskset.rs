@@ -67,10 +67,15 @@ impl TaskSet {
 
 
     /// Returns the task at index i
-    pub fn get_task(&mut self, index: usize) -> Option<&Task> {
+    pub fn get_task(&self, index: usize) -> Option<&Task> {
         if index >= self.tasks.len() {return None;}
 
         self.tasks.get(index)
+    }
+
+    pub fn get_task_utilisation(&self, index: usize) -> Option<f64> {
+        Some(self.get_task(index).unwrap().utilisation())
+
     }
 
     /// Returns the highest utilisation out of all the tasks
@@ -79,5 +84,39 @@ impl TaskSet {
         .map(|task| task.utilisation())
         .filter(|&util| !util.is_nan()) // Ignore NaN values
         .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+
+    pub fn checking_schedulability(&self) -> bool {
+        false
+    }
+    pub fn schedulability_proven(&self, _: &TaskSet) -> bool {
+        false
+    }
+
+
+    pub fn feasibility_interval(&self, taskset: &TaskSet) -> (TimeStep, TimeStep) {
+        let w_0 = taskset
+            .iter()
+            .map(|task| task.wcet())
+            .sum::<TimeStep>();
+
+        let mut w_k = w_0;
+
+        loop {
+            let w_k_next = taskset
+                .iter()
+                .map(|task| {
+                    let ceiling_term = (w_k + task.period() - 1) / task.period();
+                    ceiling_term * task.wcet()
+                })
+                .sum();
+
+            if w_k_next == w_k {
+                break (w_0, w_k);
+            } else {
+                w_k = w_k_next;
+            }
+        }
     }
 }

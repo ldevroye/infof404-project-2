@@ -8,7 +8,7 @@ pub enum SchedulingCode {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EDFVersion {
     Global,
     Partitioned,
