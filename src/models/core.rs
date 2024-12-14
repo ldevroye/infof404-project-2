@@ -1,7 +1,8 @@
 use crate::constants::EDFVersion;
 use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID};
 use crate::scheduler::{Scheduler};
-use std::thread;
+use std::ops::Add;
+use std::{task, thread};
 use std::sync::{Arc, Mutex};
 
 use std::collections::HashMap;
@@ -29,9 +30,9 @@ impl Core {
     pub fn new_task_set(id: ID, task_set:TaskSet) -> Self {
         Self {
             id,
-            map_migrations: HashMap::new(),
+            map_migrations: task_set.iter().map(|task| (task.id(), 0)).collect(), // put a 0 into each key
+            utilisation_left: 1.00 - task_set.utilisation(),
             task_set,
-            utilisation_left: 1.00,
             current_time: 0,
         }
     }
@@ -101,13 +102,13 @@ impl Core {
         let mut queue: Vec<Job> = Vec::new();
         let feasibility_interval = self.task_set.feasibility_interval(&self.task_set).1;
         
-        for t in 0..feasibility_interval {
+        while self.current_time < feasibility_interval {
             // Try to release new jobs at time `t`
-            queue.extend(self.task_set.release_jobs(t));
+            queue.extend(self.task_set.release_jobs(self.current_time));
             
             // Check for missed deadlines
-            if queue.iter().any(|job| job.deadline_missed(t)) {
-                println!("time {:?}", t);
+            if queue.iter().any(|job| job.deadline_missed(self.current_time)) {
+                println!("time {:?}", self.current_time);
                 return SchedulingCode::UnschedulableSimulated;
             }
 
@@ -121,7 +122,10 @@ impl Core {
 
             // Filter out completed jobs
             queue = queue.into_iter().filter(|job| !job.is_complete()).collect();
+
+            self.current_time = self.current_time + 1
         }
+        
         SchedulingCode::SchedulableSimulated
     }
 }

@@ -145,6 +145,8 @@ impl Scheduler {
         partitions
     }
 
+
+    /// Main function for the partitionned EDF
     pub fn compute_partitionned(&mut self) -> SchedulingCode {
         let mut processor_done = 0 as usize;
         let mut thread_running = 0 as usize;
@@ -156,11 +158,11 @@ impl Scheduler {
         //let threads_mutex: Arc<Mutex<Vec<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(vec![]));
 
         let partition = self.partition_tasks();
-        println!("Partition : {:#?}", partition);
+        // println!("Partition : {:#?}", partition);
 
         // clone so that the scheduler and the the cores have different tasksets
         self.cores = (0..=self.num_cores-1).map(|id| Core::new_task_set(id as ID, partition[id].clone())).collect(); 
-        
+        println!("Cores : {:#?}", self.cores);
 
         while processor_done < self.num_cores {
             let resp = self.cores.get_mut(processor_done).unwrap().simulate();
@@ -227,16 +229,28 @@ impl Scheduler {
         */
     }
 
+
+    /// Hub function to chose which version to use
     pub fn test_task_set(&mut self) -> SchedulingCode {
 
-        if self.version == EDFVersion::Partitioned {
-            return self.compute_partitionned();
-        } else if self.version == EDFVersion::Global {
-            
-        } else { // EDFk
+        match self.version {
+            EDFVersion::EDFk(value) => {
+                println!("WE CAN USE THE VALUE: {}", value);
+                todo!()
+            }
+            EDFVersion::Global => {
+                todo!()
+            }
+            EDFVersion::Partitioned => {
+                return self.compute_partitionned();
+            }
 
+            _ => {
+                eprintln!("Unknow EDF version");
+                SchedulingCode::CannotTell
+            }
         }
 
-        SchedulingCode::CannotTell
+        
     }
 }

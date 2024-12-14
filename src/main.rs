@@ -128,12 +128,7 @@ fn main() {
     let version = matches.get_one::<String>("version").unwrap();
     let sorting = matches.get_one::<String>("sorting").unwrap();
 
-    //let partitions: Vec<TaskSet> = partition_tasks(taskset.get_tasks_mut(), core_number, heuristic, sorting);
-    /*let cores: Vec<Worker> = (1..=core_number)
-                            .map(|id| Worker::new(id as u32))
-                            .collect();
-    */
-    println!("Taskset : {:#?}", taskset.get_tasks());
+    //println!("Taskset : {:#?}", taskset.get_tasks());
 
     let mut scheduler: Scheduler = Scheduler::new(taskset, core_number, thread_number, heuristic.clone(), sorting.clone());          
     match version.as_str() {
@@ -150,7 +145,6 @@ fn main() {
             println!("Schedule Tasks (EDF({:?}))", version);
         }
     }
-
 
     let schedulable = scheduler.test_task_set();
         
