@@ -2,6 +2,7 @@ use crate::{partition, Core, Job, SchedulingCode, TaskSet, TimeStep, ID};
 use crate::constants::{EDFVersion, Heuristic};
 use std::cmp::Ordering;
 use std::process::exit;
+use std::result;
 
 
 pub struct Scheduler{
@@ -181,21 +182,30 @@ impl Scheduler {
         // println!("Partition : {:#?}", partition);
 
         // clone so that the scheduler and the the cores have different tasksets
-        self.cores = (0..=self.num_cores-1).map(|id| Core::new_task_set(id as ID, partition[id].clone())).collect(); 
+        self.cores = (0..=self.num_cores-1)
+        .map(|id| Core::new_task_set(id as ID, partition[id].clone()))
+        .collect(); 
+    
         println!("Cores : {:#?}", self.cores);
 
+        let mut result = SchedulingCode::SchedulableShortcut;
+
         while processor_done < self.num_cores {
-            let resp = self.cores.get_mut(processor_done).unwrap().simulate();
-            
-            if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) {
+            let current_core = self.cores.get_mut(processor_done).unwrap();
+            let resp = current_core.simulate();            
+
+            // if any is not schedulable then -> not schedulable
+            if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) { 
                 println!("Taskset not schedulable");
                 return resp;
             }
-    
+            
+            if resp == SchedulingCode::SchedulableSimulated {result = resp} // if any has to be simulated then -> simulated
+            
             processor_done += 1;
         }
 
-        SchedulingCode::SchedulableSimulated
+        return result;
 
             /* 
             {

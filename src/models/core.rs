@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use std::collections::HashMap;
 
+use super::Task;
+
 #[derive(Debug)]
 pub struct Core {
     id: ID,                             // Unique identifier 
@@ -37,11 +39,22 @@ impl Core {
         }
     }
 
-    /// Add or increment the value of the task_id
-    /// 
-    /// # Arguments
-    /// 
-    /// * 'tas'
+    /// Add as task to the core
+    pub fn add(&mut self, task: Task) {
+        self.migrate(task.id());
+        self.task_set.add_task(task);
+        
+    }
+
+    /// Remove
+    pub fn remove(&mut self, task_id: ID) {
+        if !self.task_set.task_exists(task_id) {return;}
+
+        self.task_set.retain(task_id);
+        self.migrate(task_id);
+    }
+
+    /// increment (or set to 1 if non existent) the number of moves of a task
     pub fn migrate(&mut self, task_id: ID) {
         self.map_migrations.entry(task_id)
         .and_modify(|v| *v += 1)

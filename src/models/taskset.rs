@@ -65,12 +65,26 @@ impl TaskSet {
         self.tasks.len()
     }
 
+    /// retain all the tasks that don't have the 'id'
+    pub fn retain(&mut self, id: ID) {
+        self.tasks.retain(|task| task.id() != id);
+    }
 
-    /// Returns the task at index i
+    /// Returns the task at index i (basic case is that index = id)
     pub fn get_task(&self, index: usize) -> Option<&Task> {
         if index >= self.tasks.len() {return None;}
 
         self.tasks.get(index)
+    }
+
+    /// Returns the task that has the id : 'task_id' if it exists
+    pub fn get_task_by_id(&self, task_id: ID) -> Option<&Task> {
+        self.tasks.iter().find(|&task| task.id() == task_id)
+    }
+
+    /// Check if a task with the id 'task_id' exists in the taskset
+    pub fn task_exists(&self, task_id: ID) -> bool {
+        self.tasks.iter().any(|task| task.id() == task_id)
     }
 
     pub fn get_task_utilisation(&self, index: usize) -> Option<f64> {
