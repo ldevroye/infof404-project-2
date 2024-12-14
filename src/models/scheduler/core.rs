@@ -1,21 +1,23 @@
 use crate::constants::EDFVersion;
-use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID};
+use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID, Task};
 use crate::scheduler::{Scheduler};
+
 use std::ops::Add;
 use std::{task, thread, usize};
 use std::sync::{Arc, Mutex};
-
 use std::collections::HashMap;
 
-use super::Task;
 
 #[derive(Debug)]
 pub struct Core {
     id: ID,                             // Unique identifier 
     map_migrations: HashMap<ID, usize>, // map : task -> number migration done        
     task_set: TaskSet,
+    queue: Vec<Job>,
     utilisation_left: f64,
     current_time: TimeStep,
+    feasibility_interval: Option<TimeStep>,
+
 }
 
 impl Core {
@@ -24,8 +26,10 @@ impl Core {
             id,
             map_migrations: HashMap::new(),
             task_set: TaskSet::new_empty(),
+            queue: Vec::new(),
             utilisation_left: 1.00,
             current_time: 0,
+            feasibility_interval: None,
         }
     }
 
@@ -35,7 +39,9 @@ impl Core {
             map_migrations: task_set.iter().map(|task| (task.id(), 0)).collect(), // put a 0 into each key
             utilisation_left: 1.00 - task_set.utilisation(),
             task_set,
+            queue: Vec::new(),
             current_time: 0,
+            feasibility_interval: None
         }
     }
 
@@ -70,9 +76,9 @@ impl Core {
         self.id
     }
 
-    pub fn schedule(&self, jobs: &mut Vec<Job>, k: usize) -> Option<ID> {
+    pub fn schedule(&self, jobs: &Vec<Job>, k: usize) -> Option<ID> {
         // create a vector of (task_id, job_id) of all the jobs smaller than k
-        let smallers: Vec<(ID, ID)> = jobs.iter_mut()
+        let smallers: Vec<(ID, ID)> = jobs.iter()
                                 .filter(|job| job.task_id() < k as ID)
                                 .map(|job| (job.task_id(), job.id()))
                                 .collect();
@@ -127,20 +133,11 @@ impl Core {
         return None;
     }
 
-    pub fn simulate_partitionned(&mut self) -> SchedulingCode {
-        let result = self.simulate_edfk(1);
-
-        // default response for edfk
-        if result != SchedulingCode::CannotTell {
-            return result;
-        }
-        
-        SchedulingCode::SchedulableSimulated
+    pub fn set_feasibility_interval(&mut self) {
+        self.feasibility_interval = Some(self.task_set.feasibility_interval(&self.task_set).1);
     }
 
-
-    pub fn simulate_edfk(&mut self, k: usize) -> SchedulingCode {
-
+    pub fn simulate_partitionned(&mut self) -> SchedulingCode {
         if let Some(result_shortcut) = self.test_shortcuts() {
             // println!("result != None : {:?}", result_shortcut);
             return result_shortcut;
@@ -150,31 +147,53 @@ impl Core {
         let feasibility_interval = self.task_set.feasibility_interval(&self.task_set).1;
         
         while self.current_time < feasibility_interval {
-            // Try to release new jobs at time `t`
-            queue.extend(self.task_set.release_jobs(self.current_time));
-            
-            // Check for missed deadlines
-            if queue.iter().any(|job| job.deadline_missed(self.current_time)) {
-                println!("time {:?}", self.current_time);
-                return SchedulingCode::UnschedulableSimulated;
-            }
 
-            // Clone the job to be scheduled to avoid multiple mutable borrows
-            if let Some(index_elected) = self.schedule(&mut queue, k){
-                if let Some(elected) = queue.get_mut(index_elected as usize) {
-                    elected.schedule(1);
-                }
-            }
-        
-
-            // Filter out completed jobs
-            queue = queue.into_iter().filter(|job| !job.is_complete()).collect();
-
-            self.current_time = self.current_time + 1
+            let result = self.simulate_step(1);
+            if result != None {
+                return result.unwrap();
+            }    
         }
         
-        SchedulingCode::CannotTell
+        SchedulingCode::SchedulableSimulated
 
+    }
+
+
+    /// Simulate 1 step at a time
+    /// 
+    /// # Arguments
+    /// 
+    /// * 'k' the k for edf_k (if set to 1 then it is equal to edf normal)
+    pub fn simulate_step(&mut self, k: usize) -> Option<SchedulingCode> {
+
+        if self.feasibility_interval == None {
+            self.set_feasibility_interval();
+        } else if self.current_time >= self.feasibility_interval.unwrap() {
+            return Some(SchedulingCode::CannotTell);
+        }
+
+        // Try to release new jobs at time `t`
+        self.queue.extend(self.task_set.release_jobs(self.current_time));
+        
+        // Check for missed deadlines
+        if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
+            println!("time {:?}", self.current_time);
+            return Some(SchedulingCode::UnschedulableSimulated);
+        }
+
+        // Clone the job to be scheduled to avoid multiple mutable borrows
+        if let Some(index_elected) = self.schedule(&self.queue, k){
+            if let Some(elected) = self.queue.get_mut(index_elected as usize) {
+                elected.schedule(1);
+            }
+        }
+
+        // Filter out completed jobs
+        let _ = self.queue.iter_mut().filter(|job| !job.is_complete());
+
+        self.current_time = self.current_time + 1;
+
+        None
     }
 }
 

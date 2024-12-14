@@ -1,5 +1,7 @@
-use crate::{partition, Core, Job, SchedulingCode, TaskSet, TimeStep, ID};
+use crate::{partition, Job, SchedulingCode, TaskSet, TimeStep, ID};
 use crate::constants::{EDFVersion, Heuristic};
+use crate::scheduler::{Core};//, GlobalCore, PartitionnedCore} 
+
 use std::cmp::Ordering;
 use std::process::exit;
 use std::result;
@@ -23,21 +25,22 @@ impl Scheduler {
             version : EDFVersion::Partitioned,
             num_cores,
             num_threads,
-            cores: (0..=num_cores-1).map(|id| Core::new(id as ID)).collect(),
+            cores: (1..=num_cores).map(|id| Core::new(id as ID)).collect(),
             heuristic,
             sorting_order,
         }
-    }
 
+        
+    }
     pub fn set_version(&mut self, new_version: EDFVersion) {
         self.version = new_version;
     }
 
 
     pub fn check_global_edf_schedulability(&self) -> bool {
-        
         let num_cores_f64 = self.num_cores as f64;
         self.task_set.utilisation() <= num_cores_f64 - (num_cores_f64 - 1.0) * self.task_set.max_utilisation()
+
     }
 
     pub fn check_edf_k_schedulability(&self) -> bool {
@@ -47,7 +50,7 @@ impl Scheduler {
         };
 
         if k >= self.task_set.len() - 1 {
-            std::process::exit(SchedulingCode::UnschedulableShortcut as i32);
+            return false;
         }
         
         if self.task_set.get_task(k).unwrap().utilisation() == 1.0 {
@@ -200,7 +203,10 @@ impl Scheduler {
                 return resp;
             }
             
-            if resp == SchedulingCode::SchedulableSimulated {result = resp} // if any has to be simulated then -> simulated
+            // if any has to be simulated then -> ok simulated
+            if resp == SchedulingCode::SchedulableSimulated {
+                result = resp
+            } 
             
             processor_done += 1;
         }
@@ -263,39 +269,45 @@ impl Scheduler {
     pub fn compute_edfk(&mut self) -> SchedulingCode {
 
         let mut result = SchedulingCode::SchedulableShortcut;
-
-        // TODO CHANGE, NOT THE PROPER ALGORTIHM
-        let mut processor_done = 0 as usize;
-
-        let partition = self.partition_tasks();
-        // println!("Partition : {:#?}", partition);
-
-        // clone so that the scheduler and the the cores have different tasksets
-        self.cores = (0..=self.num_cores-1)
-        .map(|id| Core::new_task_set(id as ID, partition[id].clone()))
-        .collect(); 
-    
-        println!("Cores : {:#?}", self.cores);
-
-        let mut result = SchedulingCode::SchedulableShortcut;
-
-        while processor_done < self.num_cores {
-            let current_core = self.cores.get_mut(processor_done).unwrap();
-            let resp = current_core.simulate_partitionned();            
-
-            // if any is not schedulable then -> not schedulable
-            if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) { 
-                println!("Taskset not schedulable");
-                return resp;
-            }
-            
-            if resp == SchedulingCode::SchedulableSimulated {result = resp} // if any has to be simulated then -> simulated
-            
-            processor_done += 1;
+        if ! self.check_edf_k_schedulability() {
+            return SchedulingCode::UnschedulableShortcut;
         }
         
+        // partition the taskset for the k smallest
+        
 
+
+        // looks like Core.simulate()
+        /* 
+        if let Some(result_shortcut) = self.test_shortcuts() {
+            // println!("result != None : {:?}", result_shortcut);
+            return result_shortcut;
+        }
+
+        let mut queue: Vec<Job> = Vec::new();
+        let feasibility_interval = self.task_set.feasibility_interval(&self.task_set).1;
+        
+        while self.current_time < feasibility_interval {
+
+            let result = self.simulate_step(1);
+            if result != None {
+                return result.unwrap();
+            }    
+        }
+        
+        */
+        
         return result;
+    }
+
+    pub fn compute_global(&mut self) -> SchedulingCode {
+        let mut result = SchedulingCode::SchedulableShortcut;
+
+        if !self.check_global_edf_schedulability() {
+            return SchedulingCode::UnschedulableShortcut;
+        }
+
+        return SchedulingCode::CannotTell;
     }
 
     /// Hub function to chose which version to use

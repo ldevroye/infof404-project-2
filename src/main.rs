@@ -1,16 +1,18 @@
 use std::error::Error;
 use std::process::exit;
 use std::{iter, process};
-use clap::{Command, Arg};
-use csv::ReaderBuilder;
-use clap::ArgMatches;
-use multiprocessor::constants::EDFVersion;
-use multiprocessor::scheduler::Scheduler;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::thread::available_parallelism;
 
-use multiprocessor::{partition, Partition, SchedulingCode, Task, TaskSet, TimeStep, Core};
+use clap::{Command, Arg, ArgMatches};
+use csv::ReaderBuilder;
+
+use multiprocessor::constants::EDFVersion;
+use multiprocessor::scheduler::{Scheduler, Core};
+
+
+use multiprocessor::{partition, Partition, SchedulingCode, Task, TaskSet, TimeStep,};
 
 
 /// Reads a task set file and returns a `TaskSet`
@@ -101,7 +103,7 @@ fn main() {
         Ok(taskset) => taskset,
         Err(e) => {
             eprintln!("Error reading task file: {}", e);
-            process::exit(2);
+            process::exit(5);
         }
     };
     let default_parallelism_approx = available_parallelism().unwrap().get();
@@ -125,8 +127,17 @@ fn main() {
             println!("Schedule Tasks (Global EDF)");
         }
         _ => { // assume k is an integer if not the other two
-            scheduler.set_version(EDFVersion::EDFk(version.parse::<usize>().unwrap()));
-            println!("Schedule Tasks (EDF({:?}))", version);
+            if let Ok(k) = version.parse::<usize>() {
+                scheduler.set_version(EDFVersion::EDFk(k));
+                println!("Schedule Tasks (EDF({:?}))", k);
+            } else {
+                eprintln!(
+                    "Invalid version: '{}'. Please use 'partitioned', 'global', or a valid integer for EDF(k).",
+                    version
+                );
+                // Handle the error (e.g., exit the program or return an error)
+                std::process::exit(5); // Optional: Exit the program with an error code
+            }
         }
     }
 
