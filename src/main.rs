@@ -78,22 +78,6 @@ pub fn build_cli_command() -> Command {
 }
 
 
-/// Partition the `n` tasks over `m` processors according the the `heuristic` to follow and the sorting `order`
-///
-/// # Arguments
-///
-/// * `task` - the set of tasks to partition of size n.
-/// * `m` - the number of available processors.
-/// * `heuristic` - the heuristic to fill the processors.
-/// * `order` - increasing of decreasing order of utilisation.
-///
-/// # Returns 
-///
-/// A partition such that the ith vector of tasks is to be done by the ith processor
-/// 
-/// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
-
-
 
 fn global_edf(tasks: &mut Vec<Task>, m: usize) -> Vec<Task> {
     tasks.sort_by(|a, b| a.deadline().cmp(&b.deadline()));

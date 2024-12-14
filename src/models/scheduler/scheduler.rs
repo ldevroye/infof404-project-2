@@ -32,27 +32,47 @@ impl Scheduler {
         self.version = new_version;
     }
 
-    
 
-    pub fn check_global_edf_schedulability(&self, taskset: &TaskSet, num_cores: usize) -> bool {
-        let num_cores_f64 = num_cores as f64;
-        taskset.utilisation() <= num_cores_f64 - (num_cores_f64 - 1.0) * taskset.max_utilisation()
+    pub fn check_global_edf_schedulability(&self) -> bool {
+        
+        let num_cores_f64 = self.num_cores as f64;
+        self.task_set.utilisation() <= num_cores_f64 - (num_cores_f64 - 1.0) * self.task_set.max_utilisation()
     }
 
-    pub fn check_edf_k_schedulability(&self, k: usize, taskset: &mut TaskSet, num_cores: usize) -> bool {
-        if k >= taskset.len() - 1 {
+    pub fn check_edf_k_schedulability(&self) -> bool {
+        let k = match self.version {
+            EDFVersion::EDFk(value) => {value} 
+            _ => {1} // edfk(1) = edf
+        };
+
+        if k >= self.task_set.len() - 1 {
             std::process::exit(SchedulingCode::UnschedulableShortcut as i32);
         }
         
-        if taskset.get_task(k).unwrap().utilisation() == 1.0 {
+        if self.task_set.get_task(k).unwrap().utilisation() == 1.0 {
             return false;
         }
         
-        return num_cores as f64 >= k as f64 +
-                            taskset.get_task_utilisation(k + 1).unwrap() / 
-                            (1.0 - taskset.get_task_utilisation(k ).unwrap());
+        return self.num_cores as f64 >= k as f64 +
+                            self.task_set.get_task_utilisation(k + 1).unwrap() / 
+                            (1.0 - self.task_set.get_task_utilisation(k ).unwrap());
     }
 
+
+    /// Partition the `n` tasks over `m` processors according the the `heuristic` to follow and the sorting `order`
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - the set of tasks to partition of size n.
+    /// * `m` - the number of available processors.
+    /// * `heuristic` - the heuristic to fill the processors.
+    /// * `order` - increasing of decreasing order of utilisation.
+    ///
+    /// # Returns 
+    ///
+    /// A partition such that the ith vector of tasks is to be done by the ith processor
+    /// 
+    /// Example for 3 tasks and 2 processors : [[Task 3, Task 1], [Task 2]]
     fn partition_tasks(&mut self) -> Vec<TaskSet> {
 
         if self.sorting_order == "du" {
