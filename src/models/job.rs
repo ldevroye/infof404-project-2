@@ -1,6 +1,6 @@
 use crate::TimeStep;
 
-use super::{Task, ID};
+use super::ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Job {

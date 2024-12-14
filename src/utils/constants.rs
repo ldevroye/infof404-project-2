@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SchedulingCode {
     SchedulableSimulated = 0,
     SchedulableShortcut = 1,
@@ -8,7 +8,7 @@ pub enum SchedulingCode {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EDFVersion {
     Global,
     Partitioned,

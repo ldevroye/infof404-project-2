@@ -1,4 +1,3 @@
-use crate::task;
 
 use super::{Job, Task, TimeStep, ID};
 
@@ -20,8 +19,9 @@ impl TaskSet {
         self.tasks.iter().map(|t| t.utilisation()).sum()
     }
 
-    pub fn is_feasible(&self, num_workers: ID) -> bool {
-        self.utilisation() <= num_workers as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
+    pub fn is_feasible(&self) -> bool {
+        self.utilisation() <= 1 as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
+        
     }
 
     pub fn is_empty(&self) -> bool {
@@ -57,10 +57,66 @@ impl TaskSet {
         &self.tasks
     }
 
+    pub fn get_tasks_copy(self) -> Vec<Task> {
+        self.tasks
+    }
+
+    pub fn len(&self) -> usize {
+        self.tasks.len()
+    }
+
+
     /// Returns the task at index i
-    pub fn get_task(&mut self, index: usize) -> Option<&Task> {
+    pub fn get_task(&self, index: usize) -> Option<&Task> {
         if index >= self.tasks.len() {return None;}
 
         self.tasks.get(index)
+    }
+
+    pub fn get_task_utilisation(&self, index: usize) -> Option<f64> {
+        Some(self.get_task(index).unwrap().utilisation())
+
+    }
+
+    /// Returns the highest utilisation out of all the tasks
+    pub fn max_utilisation(&self) -> f64 {
+        self.tasks.iter()
+        .map(|task| task.utilisation())
+        .filter(|&util| !util.is_nan()) // Ignore NaN values
+        .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+
+    pub fn checking_schedulability(&self) -> bool {
+        false
+    }
+    pub fn schedulability_proven(&self, _: &TaskSet) -> bool {
+        false
+    }
+
+
+    pub fn feasibility_interval(&self, taskset: &TaskSet) -> (TimeStep, TimeStep) {
+        let w_0 = taskset
+            .iter()
+            .map(|task| task.wcet())
+            .sum::<TimeStep>();
+
+        let mut w_k = w_0;
+
+        loop {
+            let w_k_next = taskset
+                .iter()
+                .map(|task| {
+                    let ceiling_term = (w_k + task.period() - 1) / task.period();
+                    ceiling_term * task.wcet()
+                })
+                .sum();
+
+            if w_k_next == w_k {
+                break (w_0, w_k);
+            } else {
+                w_k = w_k_next;
+            }
+        }
     }
 }
