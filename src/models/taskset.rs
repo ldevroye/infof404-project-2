@@ -72,4 +72,12 @@ impl TaskSet {
 
         self.tasks.get(index)
     }
+
+    /// Returns the highest utilisation out of all the tasks
+    pub fn max_utilisation(&self) -> f64 {
+        self.tasks.iter()
+        .map(|task| task.utilisation())
+        .filter(|&util| !util.is_nan()) // Ignore NaN values
+        .fold(f64::NEG_INFINITY, f64::max)
+    }
 }

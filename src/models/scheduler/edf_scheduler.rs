@@ -1,5 +1,5 @@
 use super::scheduler::Scheduler;
-use crate::{Job, TimeStep, ID};
+use crate::{Job, TimeStep, ID, TaskSet};
 
 pub struct EarliestDeadlineFirst;
 
@@ -26,7 +26,7 @@ impl Scheduler for EarliestDeadlineFirst {
         Some(index_to_ret)
     }
     
-    fn feasibility_interval(&self, taskset: &crate::TaskSet) -> (TimeStep, TimeStep) {
+    fn feasibility_interval(&self, taskset: &TaskSet) -> (TimeStep, TimeStep) {
         let w_0 = taskset
             .iter()
             .map(|task| task.wcet())
@@ -50,4 +50,5 @@ impl Scheduler for EarliestDeadlineFirst {
             }
         }
     }
+    
 }
