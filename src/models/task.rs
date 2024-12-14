@@ -57,6 +57,7 @@ impl Task {
         if current_time < self.offset {
             return None;
         }
+
         // Not a time at which a job should be released
         if (current_time - self.offset) % self.period != 0 {
             return None;
@@ -64,7 +65,7 @@ impl Task {
         
         self.jobs_released += 1;
         
-        Some(Job::new(self.jobs_released,
+        Some(Job::new(self.jobs_released + 1, // don't start at 0
             self.id, 
             self.wcet,
             self.deadline(), 

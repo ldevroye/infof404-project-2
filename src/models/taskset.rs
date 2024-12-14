@@ -110,6 +110,9 @@ impl TaskSet {
 
 
     pub fn feasibility_interval(&self, taskset: &TaskSet) -> (TimeStep, TimeStep) {
+        // [Omax, Omax + 2P]
+
+        
         let w_0 = taskset
             .iter()
             .map(|task| task.wcet())

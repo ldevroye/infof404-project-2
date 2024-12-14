@@ -192,7 +192,7 @@ impl Scheduler {
 
         while processor_done < self.num_cores {
             let current_core = self.cores.get_mut(processor_done).unwrap();
-            let resp = current_core.simulate();            
+            let resp = current_core.simulate_partitionned();            
 
             // if any is not schedulable then -> not schedulable
             if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) { 
@@ -260,13 +260,50 @@ impl Scheduler {
     }
 
 
+    pub fn compute_edfk(&mut self) -> SchedulingCode {
+
+        let mut result = SchedulingCode::SchedulableShortcut;
+
+        // TODO CHANGE, NOT THE PROPER ALGORTIHM
+        let mut processor_done = 0 as usize;
+
+        let partition = self.partition_tasks();
+        // println!("Partition : {:#?}", partition);
+
+        // clone so that the scheduler and the the cores have different tasksets
+        self.cores = (0..=self.num_cores-1)
+        .map(|id| Core::new_task_set(id as ID, partition[id].clone()))
+        .collect(); 
+    
+        println!("Cores : {:#?}", self.cores);
+
+        let mut result = SchedulingCode::SchedulableShortcut;
+
+        while processor_done < self.num_cores {
+            let current_core = self.cores.get_mut(processor_done).unwrap();
+            let resp = current_core.simulate_partitionned();            
+
+            // if any is not schedulable then -> not schedulable
+            if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) { 
+                println!("Taskset not schedulable");
+                return resp;
+            }
+            
+            if resp == SchedulingCode::SchedulableSimulated {result = resp} // if any has to be simulated then -> simulated
+            
+            processor_done += 1;
+        }
+        
+
+        return result;
+    }
+
     /// Hub function to chose which version to use
     pub fn test_task_set(&mut self) -> SchedulingCode {
 
         match self.version {
             EDFVersion::EDFk(value) => {
-                println!("WE CAN USE THE VALUE: {}", value);
-                todo!()
+                return self.compute_edfk();
             }
             EDFVersion::Global => {
                 todo!()

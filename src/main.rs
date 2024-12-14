@@ -18,7 +18,7 @@ pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
     let mut rdr = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
     let mut tasks = Vec::new();
 
-    let mut id = 0;
+    let mut id = 1;
 
     for result in rdr.records() {
         let record = result?;
@@ -55,8 +55,8 @@ pub fn build_cli_command() -> Command {
         .short('v')
         .long("version")
         .required(true)
-        .help("Version of EDF to use (global, partitioned, or EDF(k))")
-        .value_parser(["global", "partitioned", "k"]))
+        .help("Version of EDF to use (global, partitioned, or EDF(k))"))
+        //.value_parser(["global", "partitioned", "k"]))
         
     .arg(Arg::new("workers")
         .short('w')

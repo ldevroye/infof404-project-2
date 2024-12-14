@@ -2,7 +2,7 @@ use crate::constants::EDFVersion;
 use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID};
 use crate::scheduler::{Scheduler};
 use std::ops::Add;
-use std::{task, thread};
+use std::{task, thread, usize};
 use std::sync::{Arc, Mutex};
 
 use std::collections::HashMap;
@@ -70,7 +70,19 @@ impl Core {
         self.id
     }
 
-    pub fn schedule<'a>(&'a self, jobs: &'a mut Vec<Job>) -> Option<ID> {
+    pub fn schedule(&self, jobs: &mut Vec<Job>, k: usize) -> Option<ID> {
+        // create a vector of (task_id, job_id) of all the jobs smaller than k
+        let smallers: Vec<(ID, ID)> = jobs.iter_mut()
+                                .filter(|job| job.task_id() < k as ID)
+                                .map(|job| (job.task_id(), job.id()))
+                                .collect();
+
+        // return the smallest task_id if it is below k
+        if smallers.len() > 0 {
+            let (_, job_id) = smallers.iter().min_by_key(|&&(task_id, _)| task_id).unwrap();
+            return Some(*job_id);
+        }
+
         if jobs.is_empty() {
             return None;
         }
@@ -92,26 +104,48 @@ impl Core {
         Some(index_to_ret)
     }
 
-    pub fn simulate(&mut self) -> SchedulingCode {
-
+    /// Test for possible basic shortcuts, if there is not -> None
+    pub fn test_shortcuts(&self) -> Option<SchedulingCode> {
         if self.task_set.is_empty() {
-            return SchedulingCode::SchedulableShortcut;
+            return Some(SchedulingCode::SchedulableShortcut);
         }
 
         
         if !self.task_set.is_feasible() {
-            return SchedulingCode::UnschedulableShortcut
+            return Some(SchedulingCode::UnschedulableShortcut);
         }
 
         
         if self.task_set.checking_schedulability() { // TODO check ?
             if self.task_set.schedulability_proven(&self.task_set) {
-                return SchedulingCode::SchedulableShortcut;
+                return Some(SchedulingCode::SchedulableShortcut);
             } else {
-                return SchedulingCode::UnschedulableShortcut;
+                return Some(SchedulingCode::UnschedulableShortcut);
             }
         }
         
+        return None;
+    }
+
+    pub fn simulate_partitionned(&mut self) -> SchedulingCode {
+        let result = self.simulate_edfk(1);
+
+        // default response for edfk
+        if result != SchedulingCode::CannotTell {
+            return result;
+        }
+        
+        SchedulingCode::SchedulableSimulated
+    }
+
+
+    pub fn simulate_edfk(&mut self, k: usize) -> SchedulingCode {
+
+        if let Some(result_shortcut) = self.test_shortcuts() {
+            // println!("result != None : {:?}", result_shortcut);
+            return result_shortcut;
+        }
+
         let mut queue: Vec<Job> = Vec::new();
         let feasibility_interval = self.task_set.feasibility_interval(&self.task_set).1;
         
@@ -126,7 +160,7 @@ impl Core {
             }
 
             // Clone the job to be scheduled to avoid multiple mutable borrows
-            if let Some(index_elected) = self.schedule(&mut queue){
+            if let Some(index_elected) = self.schedule(&mut queue, k){
                 if let Some(elected) = queue.get_mut(index_elected as usize) {
                     elected.schedule(1);
                 }
@@ -139,7 +173,8 @@ impl Core {
             self.current_time = self.current_time + 1
         }
         
-        SchedulingCode::SchedulableSimulated
+        SchedulingCode::CannotTell
+
     }
 }
 
