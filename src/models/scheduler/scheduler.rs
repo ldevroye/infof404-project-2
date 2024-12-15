@@ -323,10 +323,7 @@ impl Scheduler {
         
         let mut result = SchedulingCode::CannotTell;
         
-        let mut time: TimeStep = 0;
-        
-        let max_time: TimeStep = self.task_set.feasibility_interval().1;
-
+        let (mut time, max_time) = self.task_set.feasibility_interval();
 
         while time < max_time {
             let mut queue: Vec<(Job, ID)> = Vec::new();
@@ -360,9 +357,13 @@ impl Scheduler {
                     break;
                 }
 
+
                 let elected_index: ID = result.unwrap();
 
                 let (current_job, core_id) = queue.get_mut(elected_index).unwrap();
+
+                println!("result {}, task_id {}, core {}", elected_index, current_job.task_id(), core_id);
+
 
                 // check if the core is not assigned 
                 // or if the deadline of the new_job is < than the job already in the core 

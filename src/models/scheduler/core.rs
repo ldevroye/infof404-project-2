@@ -224,28 +224,34 @@ impl Core {
     /// true if simulation was ok, false if deadline missed
     pub fn simulate_step(&mut self, k: usize) -> CoreValue {
 
-        
+        let mut result = CoreValue::Running;
+
         // Check for missed deadlines
         if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
             println!("time {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, self.queue[0].task_id(), self.queue[0].id());
-            return CoreValue::Missed;
-        }
+            result = CoreValue::Missed;
 
-        if self.queue.is_empty() {return CoreValue::Running;}
-        
-        let job = self.queue.get_mut(0).unwrap();
-        job.schedule();
+        } else {
 
-        // Filter out completed jobs and free the task_id of the core
-        if job.is_complete() {
-            self.task_set.retain_not(job.task_id());
-            self.queue.remove(0);
-            return CoreValue::Commplete;
+            if !self.queue.is_empty() {
+                
+                let job = self.queue.get_mut(0).unwrap();
+                job.schedule();
+
+                // Filter out completed jobs and free the task_id of the core
+                if job.is_complete() {
+                    println!("complete {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, job.task_id(), job.id());
+
+                    self.task_set.retain_not(job.task_id());
+                    self.queue.remove(0);
+                    result = CoreValue::Commplete;
+                }
+            }
         }
 
         self.current_time += 1;
 
-        return CoreValue::Running;
+        return result;
     }
 }
 
