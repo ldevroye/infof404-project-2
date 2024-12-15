@@ -1,6 +1,12 @@
 use crate::TimeStep;
 
 
+#[derive(PartialEq)]
+pub enum CoreValue {
+    Running,
+    Commplete,
+    Missed,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum SchedulingCode {

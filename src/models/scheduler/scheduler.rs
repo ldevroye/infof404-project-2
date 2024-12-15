@@ -1,6 +1,6 @@
 use crate::models::job;
 use crate::{partition, Job, SchedulingCode, TaskSet, TimeStep, ID};
-use crate::constants::{EDFVersion, Heuristic};
+use crate::constants::{CoreValue, EDFVersion, Heuristic};
 use crate::scheduler::{Core};//, GlobalCore, PartitionnedCore} 
 
 use std::cmp::Ordering;
@@ -276,36 +276,38 @@ impl Scheduler {
     }
 
 
-    /// edf_k job scheduling : gives at most one job_id per processor
+    /// edf_k job scheduling : gives the job with lowest shown deadline
     pub fn schedule_jobs(queue: &Vec<(Job, usize)>, k: usize) -> Option<ID> {
-
-        // normal edf scheduling
-
-        if queue.is_empty() {
-            return None; 
-        }
 
         // Initialize with the absolute deadline of the first job in the list.
         
         if queue.len() == 0 {
             return None;
         }
-        let mut smallest = queue[0].0.absolute_deadline();
-        let mut index_to_ret: ID = 0;
+
+
+        let mut smallest = TimeStep::MAX;
+        let mut index_to_ret: Option<ID> = None;
 
         // Iterate over the jobs to find the one with the earliest absolute deadline.
         let jobs_size = queue.len();
         for i in 0..jobs_size {
             if smallest == TimeStep::MIN {break;}
 
-            let current_deadline = queue[i].0.absolute_deadline();
+            let (job, id_core) = &queue[i];
+
+            if *id_core != 0 { // job already taken by a core
+                continue;
+            }
+
+            let current_deadline = job.absolute_deadline();
             if current_deadline < smallest {
                 smallest = current_deadline;
-                index_to_ret = i as ID;
+                index_to_ret = Some(i as ID);
             }
         }
 
-        Some(index_to_ret)
+        index_to_ret
 
     }
     
@@ -318,9 +320,13 @@ impl Scheduler {
         }
 
         let k = self.get_k();
-        let mut result = SchedulingCode::SchedulableShortcut;
+        
+        let mut result = SchedulingCode::CannotTell;
+        
         let mut time: TimeStep = 0;
+        
         let max_time: TimeStep = self.task_set.feasibility_interval().1;
+
 
         while time < max_time {
             let mut queue: Vec<(Job, ID)> = Vec::new();
@@ -335,28 +341,35 @@ impl Scheduler {
             }
 
             queue.extend(job_to_add.into_iter().map(|job| (job, 0)));
-            let remaining:Vec<Job> = queue.clone().into_iter().map(|(job, _)| job).collect();
             
             // try to add 1 job with lowest prio to each core
             for index_core in 0..self.num_cores-1 {
                 let current_core = self.cores.get_mut(index_core).unwrap();
 
                 // if queue empty or the job in the core is already == -inf
-                if queue.is_empty() || 
-                (current_core.current_job_is_inf().is_some() &&
-                current_core.current_job_is_inf().unwrap()) {
+                if queue.is_empty() {
+                    break;
+                } else if (current_core.current_job_is_inf().is_some()) {
+                    if current_core.current_job_is_inf().unwrap() {
+                        continue;
+                    }
+                }
+
+                let result = Scheduler::schedule_jobs(&queue,k);
+                if result.is_none() { // there is no job not handleled by a core
                     break;
                 }
 
-                let elected_index: ID = Scheduler::schedule_jobs(&queue, k).unwrap();
+                let elected_index: ID = result.unwrap();
+
                 let (current_job, core_id) = queue.get_mut(elected_index).unwrap();
 
                 // check if the core is not assigned 
                 // or if the deadline of the new_job is < than the job already in the core 
                 if !current_core.is_assigned() || 
                 (current_core.is_assigned() && 
-                  (current_core.current_job_deadline().is_some() &&
-                  current_core.current_job_deadline().unwrap() > current_job.absolute_deadline())) {
+                  (current_core.current_job_deadline().unwrap() > current_job.absolute_deadline()) &&
+                  current_core.current_job_deadline().is_some()) {
 
 
                     if current_core.is_assigned() { 
@@ -375,29 +388,32 @@ impl Scheduler {
             for index_core in 0..self.num_cores-1 {
 
                 let current_core = self.cores.get_mut(index_core).unwrap();
+                
+                if !current_core.is_assigned() {
+                    continue;
+                }
 
-                current_core.simulate_step(k);
-                
-                
+                let resp = current_core.simulate_step(k);
+                if resp == CoreValue::Missed {
+                    result = SchedulingCode::UnschedulableSimulated;
+                    return result;
+                } else if resp == CoreValue::Commplete {
+                    // remove the job complete from queue
+                    queue.retain(|(_, id)| *id != current_core.id());
+                }
             }
 
             time += 1
         }
 
-        return SchedulingCode::CannotTell;
+        return result;
 
     }
 
 
 
     pub fn compute_global(&mut self) -> SchedulingCode {
-        let mut result = SchedulingCode::SchedulableShortcut;
-
-        if !self.check_global_edf_schedulability() {
-            return SchedulingCode::UnschedulableShortcut;
-        }
-
-        return SchedulingCode::CannotTell;
+        self.compute_edfk() // k will be 1
     }
 
     /// Hub function to chose which version to use
@@ -408,7 +424,7 @@ impl Scheduler {
                 return self.compute_edfk();
             }
             EDFVersion::Global => {
-                todo!()
+                return self.compute_global();
             }
             EDFVersion::Partitioned => {
                 return self.compute_partitionned();

@@ -77,7 +77,7 @@ impl TaskSet {
     }
 
     /// retain all the tasks that don't have the 'id'
-    pub fn retain(&mut self, id: ID) {
+    pub fn retain_not(&mut self, id: ID) {
         self.tasks.retain(|task| task.id() != id);
     }
 
@@ -123,13 +123,15 @@ impl TaskSet {
     pub fn feasibility_interval(&self) -> (TimeStep, TimeStep) {
         // [Omax, Omax + 2P]
 
-        
+        return (0,1000);
+
         let w_0 = self.tasks
             .iter()
             .map(|task| task.wcet())
             .sum::<TimeStep>();
 
         let mut w_k = w_0;
+
 
         loop {
             let w_k_next = self.tasks
@@ -139,12 +141,15 @@ impl TaskSet {
                     ceiling_term * task.wcet()
                 })
                 .sum();
+            
 
             if w_k_next == w_k {
                 break (w_0, w_k);
             } else {
                 w_k = w_k_next;
             }
+
+
         }
     }
 }

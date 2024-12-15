@@ -1,4 +1,4 @@
-use crate::constants::EDFVersion;
+use crate::constants::{CoreValue, EDFVersion};
 use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID, Task};
 use crate::scheduler::{Scheduler};
 
@@ -94,7 +94,7 @@ impl Core {
     pub fn remove(&mut self, task_id: ID) {
         if !self.task_set.task_exists(task_id) {return;}
 
-        self.task_set.retain(task_id);
+        self.task_set.retain_not(task_id);
         self.migrate(task_id);
     }
 
@@ -190,10 +190,22 @@ impl Core {
             // Try to release new jobs at current_time
             self.queue.extend(self.task_set.release_jobs(self.current_time));
 
-            let result = self.simulate_step(1);
-            if result != None {
-                return result.unwrap();
-            }    
+            if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
+                println!("time {:?}", self.current_time);
+                return SchedulingCode::UnschedulableSimulated;
+            }
+    
+            if let Some(index_elected) = self.schedule(1){
+                if let Some(elected) = self.queue.get_mut(index_elected as usize) {
+                    elected.schedule();
+                }
+            }
+    
+            // Filter out completed jobs
+            self.queue.retain(|job| !job.is_complete());
+    
+            self.current_time += 1;
+    
         }
         
         SchedulingCode::SchedulableSimulated
@@ -206,28 +218,33 @@ impl Core {
     /// # Arguments
     /// 
     /// * 'k' the k for edf_k (if set to 1 then it is equal to edf normal)
-    pub fn simulate_step(&mut self, k: usize) -> Option<SchedulingCode> {
+    /// 
+    /// # Returns 
+    /// 
+    /// true if simulation was ok, false if deadline missed
+    pub fn simulate_step(&mut self, k: usize) -> CoreValue {
 
-        println!("time {:?} id {}", self.current_time, self.id);
         
         // Check for missed deadlines
         if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
-            println!("time {:?}", self.current_time);
-            return Some(SchedulingCode::UnschedulableSimulated);
+            println!("time {:?}, id {}", self.current_time, self.id);
+            return CoreValue::Missed;
         }
 
-        if let Some(index_elected) = self.schedule(k){
-            if let Some(elected) = self.queue.get_mut(index_elected as usize) {
-                elected.schedule();
-            }
-        }
+        if self.queue.is_empty() {return CoreValue::Running;}
+        
+        let job = self.queue.get(0).unwrap();
 
-        // Filter out completed jobs
-        self.queue.retain(|job| !job.is_complete());
+        // Filter out completed jobs and free the task_id of the core
+        if job.is_complete() {
+            self.task_set.retain_not(job.task_id());
+            self.queue.remove(0);
+            return CoreValue::Commplete;
+        }
 
         self.current_time += 1;
 
-        None
+        return CoreValue::Running;
     }
 }
 
