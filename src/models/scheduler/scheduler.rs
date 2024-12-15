@@ -310,7 +310,7 @@ impl Scheduler {
 
     }
     
-
+    /// compute the task set among all the cores using edf(k), with possible migrations inbetween cores during the simulation
     pub fn compute_edfk(&mut self) -> SchedulingCode {
 
         if ! self.check_edf_k_schedulability() {
@@ -323,6 +323,7 @@ impl Scheduler {
         
         let (mut time, max_time) = self.task_set.feasibility_interval_global();
         println!("interval : [{:?}, {:#?}]", time, max_time);
+        let mut threash_hold = max_time/100;
 
         self.cores.iter_mut().for_each(|core| core.set_time(time));
 
@@ -435,6 +436,10 @@ impl Scheduler {
             } 
 
             time += 1;
+            if (time > threash_hold) {
+                println!("{}% done", (time*100)/max_time);
+                threash_hold += max_time/100;
+            }
 
         }
 
@@ -458,9 +463,10 @@ impl Scheduler {
 
         self.task_set.get_tasks_mut().sort_by(|a, b| a.deadline().cmp(&b.deadline()));
 
-        let mut result = SchedulingCode::CannotTell;
+        let mut result = SchedulingCode::SchedulableSimulated;
         
         let (mut time, max_time) = self.task_set.feasibility_interval_global();
+        let mut thresh_hold = max_time/100;
         println!("time : [{},{}]", time, max_time);
 
         while time < max_time {
@@ -544,6 +550,10 @@ impl Scheduler {
             }
 
             time += 1;
+            if (time > thresh_hold) {
+                println!("{}% done", (time*100)/max_time);
+                thresh_hold += max_time/100;
+            }
         }
 
         result
