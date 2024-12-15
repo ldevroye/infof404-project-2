@@ -227,13 +227,14 @@ impl Core {
         
         // Check for missed deadlines
         if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
-            println!("time {:?}, id {}", self.current_time, self.id);
+            println!("time {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, self.queue[0].task_id(), self.queue[0].id());
             return CoreValue::Missed;
         }
 
         if self.queue.is_empty() {return CoreValue::Running;}
         
-        let job = self.queue.get(0).unwrap();
+        let job = self.queue.get_mut(0).unwrap();
+        job.schedule();
 
         // Filter out completed jobs and free the task_id of the core
         if job.is_complete() {

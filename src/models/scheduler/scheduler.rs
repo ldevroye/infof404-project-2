@@ -330,17 +330,17 @@ impl Scheduler {
 
         while time < max_time {
             let mut queue: Vec<(Job, ID)> = Vec::new();
-            let mut assigned: Vec<(ID, ID)> = Vec::new(); // task_id, core_id
             let mut job_to_add = self.task_set.release_jobs(time);
 
-            // set the jobs with 
+            // set the jobs deadline with task_id < k to -inf 
             for job in job_to_add.iter_mut() {
                 if job.task_id() < k as ID {
                     job.set_deadline_inf();
                 }
             }
 
-            queue.extend(job_to_add.into_iter().map(|job| (job, 0)));
+            // cores have id >= 1 so 0 = not handled
+            queue.extend(job_to_add.into_iter().map(|job| (job, 0))); 
             
             // try to add 1 job with lowest prio to each core
             for index_core in 0..self.num_cores-1 {
@@ -384,7 +384,9 @@ impl Scheduler {
                 }
             }
 
-            // simulate 1 step
+            println!("QUEUE at time {} {:#?}", time, queue);
+
+            // simulate 1 step in each cores
             for index_core in 0..self.num_cores-1 {
 
                 let current_core = self.cores.get_mut(index_core).unwrap();
@@ -396,12 +398,26 @@ impl Scheduler {
                 let resp = current_core.simulate_step(k);
                 if resp == CoreValue::Missed {
                     result = SchedulingCode::UnschedulableSimulated;
-                    return result;
+                    
                 } else if resp == CoreValue::Commplete {
                     // remove the job complete from queue
                     queue.retain(|(_, id)| *id != current_core.id());
                 }
             }
+
+            // test_deadlines for each jobs not handled
+            for (job, id) in queue.iter() {
+                if *id == 0 { // unhandled
+                    if job.deadline_missed(time) {
+                        result = SchedulingCode::UnschedulableSimulated;
+                        break;
+                    }
+                }
+            }
+
+            if result == SchedulingCode::UnschedulableSimulated {
+                break;
+            } 
 
             time += 1
         }
