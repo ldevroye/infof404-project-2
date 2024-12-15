@@ -66,7 +66,10 @@ impl Job {
     }
 
     // Methods for setting deadlines and checking conditions
-
+    pub fn set_deadline(&mut self, new: TimeStep) {
+        self.show_absolute_deadline = new;
+    }
+    
     pub fn set_deadline_inf(&mut self) {
         self.show_absolute_deadline = TimeStep::MIN;
     }

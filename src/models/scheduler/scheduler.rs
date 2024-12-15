@@ -1,20 +1,18 @@
 use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID};
-use crate::constants::EDFVersion;
-use crate::scheduler::Core; // Importing Core module
+use crate::constants::Version;
+use crate::scheduler::Core;
 
 use std::cmp::Ordering;
 use std::process::exit;
 
-#[allow(dead_code)]
-/// The Scheduler struct handles the scheduling of tasks on processors.
 pub struct Scheduler {
-    task_set: TaskSet,             // The set of tasks to schedule
-    version: EDFVersion,           // The version of EDF to use (e.g., Partitioned, Global, EDFk)
-    num_cores: usize,              // Number of processor cores
-    num_threads: usize,            // Number of threads to use
-    cores: Vec<Core>,              // The cores that handle task execution
-    heuristic: String,             // Heuristic for task partitioning (e.g., ff, nd)
-    sorting_order: String,         // Sorting order for tasks (e.g., du, iu)
+    task_set: TaskSet,
+    version: Version,
+    num_cores: usize,
+    num_threads: usize,
+    cores: Vec<Core>,
+    heuristic: String,
+    sorting_order: String,
 }
 
 impl Scheduler {
@@ -22,7 +20,7 @@ impl Scheduler {
     pub fn new(task_set: TaskSet, num_cores: usize, num_threads: usize, heuristic: String, sorting_order: String) -> Self {
         Self {
             task_set,
-            version: EDFVersion::Partitioned, // Default to Partitioned EDF
+            version: Version::Partitioned,
             num_cores,
             num_threads,
             cores: (1..=num_cores).map(|id| Core::new(id as ID)).collect(),
@@ -31,16 +29,16 @@ impl Scheduler {
         }
     }
 
-    /// Sets the version of EDF to use (e.g., Global, Partitioned, EDFk).
-    pub fn set_version(&mut self, new_version: EDFVersion) {
+    /// Sets a new version for the scheduler.
+    pub fn set_version(&mut self, new_version: Version) {
         self.version = new_version;
     }
 
-    /// Returns the k of EDF(k), or 1 if the version is not EDF(k).
+    /// Returns the 'k' value of EDF(k), or 1 if the version is not EDF(k).
     pub fn get_k(&self) -> usize {
         match self.version {
-            EDFVersion::EDFk(value) => value,
-            _ => 1, // Default to EDF(1) for non-EDF(k) versions
+            Version::EDFk(value) => value,
+            _ => 1, // EDF(1) is just EDF
         }
     }
 
@@ -54,22 +52,23 @@ impl Scheduler {
     pub fn check_edf_k_schedulability(&self) -> bool {
         let k = self.get_k();
 
+        // If k is greater than or equal to task set size, it's not schedulable
         if k >= self.task_set.len() - 1 {
             return false;
         }
-        
+
+        // If any task has full utilization, it's not schedulable
         if self.task_set.get_task(k).unwrap().utilisation() == 1.0 {
             return false;
         }
-        
-        return self.num_cores as f64 >= k as f64 +
-                            self.task_set.get_task_utilisation(k + 1).unwrap() / 
-                            (1.0 - self.task_set.get_task_utilisation(k ).unwrap());
+
+        // Check if the task set fits under EDF(k)
+        self.num_cores as f64 >= k as f64 + self.task_set.get_task_utilisation(k + 1).unwrap() / (1.0 - self.task_set.get_task_utilisation(k).unwrap())
     }
 
-    /// Partitions tasks over processors based on the selected heuristic and sorting order.
+    /// Partitions tasks across processors based on the selected heuristic and sorting order.
     pub fn partition_tasks(&mut self) -> Vec<TaskSet> {
-        // Sort tasks based on utilization, either descending ("du") or ascending ("iu")
+        // Sort tasks based on utilization in the specified order
         if self.sorting_order == "du" {
             self.task_set.get_tasks_mut().sort_by(|a, b| b.utilisation().partial_cmp(&a.utilisation()).unwrap_or(Ordering::Equal));
         } else if self.sorting_order == "iu" {
@@ -78,7 +77,8 @@ impl Scheduler {
             panic!("Unknown sorting order");
         }
 
-        let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); self.num_cores]; // Initialize empty partitions
+        // Initialize empty partitions for each core
+        let mut partitions: Vec<TaskSet> = vec![TaskSet::new_empty(); self.num_cores];
         let num_task = self.task_set.get_tasks_mut().len();
 
         match self.heuristic.as_str() {
@@ -140,8 +140,8 @@ impl Scheduler {
             _ => panic!("Unknown heuristic"),
         }
 
+        // Check if the task set can fit into the partitions
         let num_task_computed: usize = partitions.iter().map(|taskset| taskset.len()).sum();
-
         if num_task > num_task_computed {
             eprintln!("Too many tasks ({:?}, {:?} attached to a processor) for {:?} processors", num_task, num_task_computed, self.num_cores);
             println!("{:#?}", partitions);
@@ -165,6 +165,7 @@ impl Scheduler {
 
         let mut result = SchedulingCode::SchedulableShortcut;
 
+        // Simulate the scheduling process for each core
         while processor_done < self.num_cores {
             let current_core = self.cores.get_mut(processor_done).unwrap();
             let resp = current_core.simulate_partitionned(); // Simulate partitioned execution
@@ -193,13 +194,13 @@ impl Scheduler {
         let mut smallest = TimeStep::MAX;
         let mut index_to_ret: Option<ID> = None;
 
+        // Find the job with the earliest deadline
         for i in 0..queue.len() {
             if smallest == TimeStep::MIN {
                 break;
             }
 
             let job = &queue[i];
-
             let current_deadline = job.absolute_deadline();
             if current_deadline < smallest {
                 smallest = current_deadline;
@@ -209,9 +210,10 @@ impl Scheduler {
 
         index_to_ret
     }
-
-    /// Computes scheduling for EDFk.
+    
+    /// Computes the task set among all the cores using EDF(k), with possible migrations between cores during simulation.
     pub fn compute_edfk(&mut self) -> SchedulingCode {
+        // Check if EDF(k) scheduling is possible
         if !self.check_edf_k_schedulability() {
             return SchedulingCode::UnschedulableShortcut; // If not schedulable, return shortcut
         }
@@ -220,75 +222,59 @@ impl Scheduler {
         let mut queue: Vec<(Job, ID)> = Vec::new();
         let mut result = SchedulingCode::SchedulableSimulated;
 
-        let (mut time, max_time) = self.task_set.feasibility_interval();
+        // Compute the feasibility interval for the task set
+        let (mut time, max_time) = self.task_set.feasibility_interval_global();
+        println!("interval : [{:?}, {:#?}]", time, max_time);
+        let mut threash_hold = max_time / 100;
+
+        // Set the initial time for all cores
+        self.cores.iter_mut().for_each(|core| core.set_time(time));
 
         while time < max_time {
             let mut job_to_add = self.task_set.release_jobs(time);
 
-            // Set the jobs deadline for task_ids < k to -inf (ignore their deadlines)
-            for job in job_to_add.iter_mut() {
-                if job.task_id() < k as ID {
-                    job.set_deadline_inf();
+            // Set the jobs' deadline for task migration
+            if !job_to_add.is_empty() {
+                for i in 0..job_to_add.len() {
+                    job_to_add[i].set_deadline(time);
                 }
             }
 
-            queue.extend(job_to_add.into_iter().map(|job| (job, 0)));
-
-            let job_queue: Vec<Job> = queue.iter().map(|(job, _)| job.clone()).collect();
-            let index = Self::schedule_jobs(&job_queue, k); // Schedule the job based on EDFk
-
-            if let Some(index) = index {
-                let (job, _) = &queue[index as usize];
-                let job_time = job.absolute_deadline();
-
-                if time == job_time {
-                    queue.push((job.clone(), index));
-                    result = SchedulingCode::SchedulableSimulated;
+            // Handle migrations across cores during scheduling
+            for (mut task, core_id) in job_to_add {
+                let mut assignable_core = self.cores.get_mut(core_id as usize).unwrap();
+                if !assignable_core.is_accepted(task) {
+                    assignable_core = self.cores.get_mut(core_id as usize).unwrap();
+                    if !assignable_core.accepted {
+                        continue;
+                    }
+                    assignable_core.add_task(task);
+                } else {
+                    assignable_core.add_task(task);
                 }
             }
 
-            time += 1;
-        }
+            let mut response_code = SchedulingCode::SchedulableSimulated;
 
-        result
-    }
+            // Check for task migrations across cores
+            for mut job in self.cores.iter_mut() {
+                if !job.processing {
+                    continue;
+                }
 
-    /// Computes global EDF scheduling.
-    pub fn compute_global(&mut self) -> SchedulingCode {
-        if !self.check_global_edf_schedulability() {
-            return SchedulingCode::UnschedulableSimulated; // If not schedulable, return unschedulable
-        }
-
-        let mut queue: Vec<Job> = Vec::new();
-        let mut result = SchedulingCode::SchedulableSimulated;
-        let (mut time, max_time) = self.task_set.feasibility_interval();
-
-        while time < max_time {
-            let job_to_add = self.task_set.release_jobs(time);
-            queue.extend(job_to_add);
-
-            let index = Self::schedule_jobs(&queue, 1); // Use EDF for global scheduling
-
-            if let Some(index) = index {
-                let job = &queue[index as usize];
-                if time == job.absolute_deadline() {
-                    queue.push(job.clone());
-                    result = SchedulingCode::SchedulableSimulated;
+                let queue_new_jobs = Self::schedule_jobs(&job.task_queue, self.num_threads);
+                if let Some(current_job_index) = queue_new_jobs {
+                    let mut task = &job.task_queue[current_job_index];
+                    job.processing = false;
+                    job.add_task(task);
+                    response_code = SchedulingCode::SchedulableSimulated
                 }
             }
 
-            time += 1;
+            result = response_code;
+            time += threash_hold;
         }
 
-        result
-    }
-
-    /// Main function to test the task set using the selected EDF version.
-    pub fn test_task_set(&mut self) -> SchedulingCode {
-        match self.version {
-            EDFVersion::Global => self.compute_global(),
-            EDFVersion::Partitioned => self.compute_partitionned(),
-            EDFVersion::EDFk(_) => self.compute_edfk(),
-        }
+        result // Return the final result
     }
 }

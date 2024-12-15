@@ -1,12 +1,24 @@
-use crate::models::TimeStep;
-use gcd::Gcd;
+use std::iter::Iterator;
 
-fn lcm(a: usize, b: usize) -> usize {
-    (a * b) / a.gcd(b)
+// Helper function to calculate the GCD
+fn gcd(a: isize, b: isize) -> isize {
+    if b == 0 {
+        a.abs()
+    } else {
+        gcd(b, a % b)
+    }
 }
 
-pub fn multiple_lcm(numbers: &[TimeStep]) -> TimeStep {
-    numbers.iter().fold(1, |acc, &x| 
-                            (lcm((acc as usize).try_into().unwrap(),
-                                 (x as usize).try_into().unwrap()) as usize).try_into().unwrap())
+// Function to calculate the LCM of two numbers
+fn lcm(a: isize, b: isize) -> isize {
+    if a == 0 || b == 0 {
+        0 // LCM is undefined for zero
+    } else {
+        (a.abs() / gcd(a, b)) * b.abs()
+    }
+}
+
+// Function to calculate the LCM of a vector of numbers
+pub fn multiple_lcm(numbers: Vec<isize>) -> isize {
+    numbers.into_iter().reduce(|acc, n| lcm(acc, n)).unwrap_or(0)
 }

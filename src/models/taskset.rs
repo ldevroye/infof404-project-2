@@ -1,3 +1,5 @@
+use crate::multiple_lcm;
+
 use super::{Job, Task, TimeStep, ID};
 
 /// A set of tasks in the scheduling system.
@@ -189,11 +191,46 @@ impl TaskSet {
             .fold(f64::NEG_INFINITY, f64::max)
     }
 
-    /// Returns a feasibility interval for the task set.
+    /// Computes the global feasibility interval based on the task set's offset and periods.
     /// 
     /// # Returns
-    /// * `(TimeStep, TimeStep)` - The feasibility interval `[Omax, Omax + 2P]`.
-    pub fn feasibility_interval(&self) -> (TimeStep, TimeStep) {
-        (0, 1000) // Placeholder values
+    /// * `(TimeStep, TimeStep)` - The feasibility interval.
+    pub fn feasibility_interval_global(&self) -> (TimeStep, TimeStep) {
+        // [0, Omax + 2P]
+        let o_max = self.tasks.iter().map(|task| task.offset()).max().unwrap();
+        let vec_period: Vec<TimeStep> = self.tasks.iter().map(|task| task.period()).collect();
+        let p = multiple_lcm(vec_period);
+
+        // Return the feasibility interval based on the offset and periods
+        return (0, o_max + (2 * p));
+    }
+
+    /// Computes the feasibility interval for a part of the task set based on WCET and periods.
+    /// 
+    /// # Returns
+    /// * `(TimeStep, TimeStep)` - The feasibility interval for the part of the task set.
+    pub fn feasibility_interval_part(&self) -> (TimeStep, TimeStep) {
+        let w_0 = self.tasks
+            .iter()
+            .map(|task| task.wcet())
+            .sum::<TimeStep>();
+
+        let mut w_k = w_0;
+
+        loop {
+            let w_k_next = self.tasks
+                .iter()
+                .map(|task| {
+                    let ceiling_term = (w_k + task.period() - 1) / task.period();
+                    ceiling_term * task.wcet()
+                })
+                .sum();
+
+            if w_k_next == w_k {
+                break (w_0, w_k);
+            } else {
+                w_k = w_k_next;
+            }
+        }
     }
 }

@@ -1,26 +1,28 @@
 use crate::constants::CoreValue;
 use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID, Task};
+
 use std::collections::HashMap;
 
+/// Represents a single core in the scheduling system.
 #[derive(Debug)]
 pub struct Core {
     id: ID,                             // Unique identifier for the core
     map_migrations: HashMap<ID, usize>, // Maps task ID to the number of migrations performed
     task_set: TaskSet,                  // The set of tasks assigned to this core
-    queue: Vec<Job>,                    // Job queue for the core
+    queue: Vec<Job>,                    // Queue of jobs for the core
     utilisation_left: f64,              // Remaining utilization of the core
     current_time: TimeStep,             // Current time step of the simulation
     feasibility_interval: Option<TimeStep>, // Feasibility interval for the core
 }
 
 impl Core {
-    /// Creates a new Core instance.
+    /// Creates a new `Core` instance with default values.
     ///
     /// # Arguments
     /// * `id` - The unique identifier for this core.
     ///
     /// # Returns
-    /// A new `Core` instance.
+    /// A new `Core` instance with an empty task set and default values.
     pub fn new(id: ID) -> Self {
         Self {
             id,
@@ -33,7 +35,7 @@ impl Core {
         }
     }
 
-    /// Creates a new Core instance with a specific TaskSet.
+    /// Creates a new `Core` instance with a specific TaskSet.
     ///
     /// # Arguments
     /// * `id` - The unique identifier for this core.
@@ -63,7 +65,7 @@ impl Core {
         self.queue.iter().map(|job| job.remaining_time()).sum::<TimeStep>()
     }
 
-    /// Tries to add a task to the core if it does not exceed the utilization limit.
+    /// Attempts to add a task to the core if it does not exceed the utilization limit.
     ///
     /// # Arguments
     /// * `task` - The task to add to the core.
@@ -71,14 +73,17 @@ impl Core {
     /// # Returns
     /// `true` if the task was successfully added, `false` otherwise.
     pub fn add(&mut self, task: Task) -> bool {
+        // Check if the task is already assigned to the core
         if self.task_set.get_task_by_id(task.id()).is_some() {
-            return false; // Task already assigned to the core
+            return false;
         }
 
+        // Ensure the task does not exceed the core's remaining utilization
         if self.utilisation_left - task.utilisation() < 0.0 {
-            return false; // Adding the task would exceed utilization
+            return false;
         }
 
+        // Update the core's utilization and migrate the task
         self.utilisation_left -= task.utilisation();
         self.migrate(task.id());
         self.task_set.add_task(task);
@@ -92,9 +97,9 @@ impl Core {
     /// * `job` - The job to add.
     /// * `task` - The task to assign to the job.
     pub fn add_job(&mut self, job: Job, task: Task) {
-        self.queue.clear();
-        self.queue.push(job);
-        self.add(task);
+        self.queue.clear(); // Clear existing jobs in the queue
+        self.queue.push(job); // Add the new job to the queue
+        self.add(task); // Add the task to the core
     }
 
     /// Returns the ID of the first task in the task set, if any.
@@ -120,32 +125,43 @@ impl Core {
         Some(self.queue[0].is_deadline_inf())
     }
 
-    /// Removes a task from the core by its task ID.
+    /// Returns the task's deadline for the current job, if any.
+    pub fn current_job_task_deadline(&self) -> Option<TimeStep> {
+        if self.task_set.is_empty() {
+            return None;
+        }
+
+        Some(self.queue[0].task_deadline())
+    }
+
+    /// Removes a task from the core.
     ///
     /// # Arguments
     /// * `task_id` - The ID of the task to remove.
     pub fn remove(&mut self, task_id: ID) {
+        // Check if the task exists in the core
         if !self.task_set.task_exists(task_id) {
             return;
         }
 
+        // Remove the task from the task set and the job queue
         self.task_set.retain_not(task_id);
         self.queue.retain(|job| job.task_id() != task_id);
-        self.migrate(task_id);
+        self.migrate(task_id); // Migrate the task after removal
     }
 
-    /// Increments (or sets to 1 if non-existent) the migration count of a task.
+    /// Increments the migration count of a task or initializes it if it does not exist.
     ///
     /// # Arguments
-    /// * `task_id` - The ID of the task whose migration count should be updated.
+    /// * `task_id` - The ID of the task to increment the migration count.
     pub fn migrate(&mut self, task_id: ID) {
         self.map_migrations
             .entry(task_id)
             .and_modify(|v| *v += 1)
-            .or_insert(1);
+            .or_insert(1); // Initialize migration count if not present
     }
 
-    /// Returns the total number of migrations that have been performed.
+    /// Returns the total number of migrations performed for all tasks on the core.
     pub fn get_migrations(&self) -> usize {
         self.map_migrations.values().sum()
     }
@@ -155,35 +171,38 @@ impl Core {
         self.id
     }
 
-    /// Schedules the next job based on the specified `k` value.
+    /// Updates the current time step for the core.
+    pub fn set_time(&mut self, new: TimeStep) {
+        self.current_time = new;
+    }
+
+    /// Schedules the next job in the queue based on EDF (Earliest Deadline First).
     ///
     /// # Arguments
-    /// * `k` - The `k` value for EDF scheduling (1 for normal EDF).
+    /// * `k` - The priority level for scheduling (used to filter jobs).
     ///
     /// # Returns
-    /// An `Option<ID>` representing the ID of the next job to schedule.
+    /// The ID of the scheduled job, if any.
     pub fn schedule(&self, k: usize) -> Option<ID> {
-        // Create a vector of (task_id, job_id) for jobs with task_id less than k
+        // Filter jobs with task_id less than `k` and return the one with the smallest task_id
         let smallers: Vec<(ID, ID)> = self.queue.iter()
             .filter(|job| job.task_id() < k as ID)
             .map(|job| (job.task_id(), job.id()))
             .collect();
 
-        // Return the smallest task_id if it's below k
         if !smallers.is_empty() {
             let (_, job_id) = smallers.iter().min_by_key(|&&(task_id, _)| task_id).unwrap();
             return Some(*job_id);
         }
 
+        // If no job is found, find the job with the earliest absolute deadline
         if self.queue.is_empty() {
             return None;
         }
 
-        // Initialize with the absolute deadline of the first job in the list
         let mut smallest = self.queue[0].absolute_deadline();
         let mut index_to_ret: ID = 0;
 
-        // Find the job with the earliest absolute deadline
         for (i, job) in self.queue.iter().enumerate() {
             let current_deadline = job.absolute_deadline();
             if current_deadline < smallest {
@@ -195,37 +214,35 @@ impl Core {
         Some(index_to_ret)
     }
 
-    /// Tests for possible basic shortcuts (e.g., unschedulable or schedulable shortcut).
+    /// Tests for possible basic scheduling shortcuts, such as checking feasibility.
     ///
     /// # Returns
-    /// An `Option<SchedulingCode>` indicating the result of the test.
+    /// An `Option<SchedulingCode>` indicating the result of the test (schedulable or unschedulable).
     pub fn test_shortcuts(&self) -> Option<SchedulingCode> {
         if self.task_set.is_empty() {
-            return Some(SchedulingCode::SchedulableShortcut);
+            return Some(SchedulingCode::SchedulableShortcut); // No tasks, trivially schedulable
         }
 
         if !self.task_set.is_feasible() {
-            return Some(SchedulingCode::UnschedulableShortcut);
+            return Some(SchedulingCode::UnschedulableShortcut); // If tasks are not feasible, return unschedulable
         }
 
         None
     }
 
-    /// Sets the feasibility interval for the core based on the task set.
-    pub fn set_feasibility_interval(&mut self) {
-        self.feasibility_interval = Some(self.task_set.feasibility_interval().1);
-    }
-
-    /// Simulates the core's behavior with partitioned tasks.
+    /// Simulates the scheduling for partitioned tasks.
+    ///
+    /// # Returns
+    /// A `SchedulingCode` indicating the result of the simulation (schedulable or unschedulable).
     pub fn simulate_partitionned(&mut self) -> SchedulingCode {
         if let Some(result_shortcut) = self.test_shortcuts() {
-            return result_shortcut;
+            return result_shortcut; // Early return if a shortcut is found
         }
 
-        self.set_feasibility_interval();
+        self.feasibility_interval = Some(self.task_set.feasibility_interval_part().1);
 
         while self.current_time < self.feasibility_interval.unwrap() {
-            // Try to release new jobs at the current time step
+            // Release new jobs at the current time step
             self.queue.extend(self.task_set.release_jobs(self.current_time));
 
             // Check for missed deadlines
@@ -233,14 +250,14 @@ impl Core {
                 return SchedulingCode::UnschedulableSimulated;
             }
 
-            // Schedule the next job
+            // Schedule the next job if possible
             if let Some(index_elected) = self.schedule(1) {
                 if let Some(elected) = self.queue.get_mut(index_elected as usize) {
                     elected.schedule();
                 }
             }
 
-            // Filter out completed jobs
+            // Remove completed jobs from the queue
             self.queue.retain(|job| !job.is_complete());
 
             self.current_time += 1;
@@ -249,34 +266,35 @@ impl Core {
         SchedulingCode::SchedulableSimulated
     }
 
-    /// Simulates one step at a time, checking for missed deadlines and job completions.
+    /// Simulates one step of scheduling and checks for missed deadlines or job completion.
     ///
     /// # Arguments
-    /// * `k` - The `k` value for EDF scheduling.
+    /// * `k` - The priority level for scheduling (currently unused).
     ///
     /// # Returns
-    /// A `CoreValue` indicating the status of the core after the step.
+    /// A `CoreValue` indicating the status of the core after the simulation step.
     pub fn simulate_step(&mut self, _: usize) -> CoreValue {
         let mut result = CoreValue::Running;
 
-        // Check for missed deadlines
+        // Check if any job has missed its deadline
         if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
-            result = CoreValue::Missed;
+            result = CoreValue::Missed; // Mark the core as having missed a deadline
         } else {
+            // If the queue is not empty, schedule the first job
             if !self.queue.is_empty() {
                 let job = self.queue.get_mut(0).unwrap();
                 job.schedule();
 
-                // Filter out completed jobs
+                // Clear the queue if the job is complete
                 if job.is_complete() {
                     self.task_set.get_tasks_mut().clear();
                     self.queue.clear();
-                    result = CoreValue::Complete;
+                    result = CoreValue::Complete; // Mark the core as complete
                 }
             }
         }
 
-        self.current_time += 1;
+        self.current_time += 1; // Increment the time step
         result
     }
 }
