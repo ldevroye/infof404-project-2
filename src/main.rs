@@ -126,7 +126,7 @@ fn main() {
             scheduler.set_version(Version::Global);
             println!("Schedule Tasks (Global EDF)");
         }
-        "DM" => {
+        "dm" => {
             scheduler.set_version(Version::GlobalDM);
             println!("Schedule Tasks (Global DM)");
 
@@ -140,7 +140,7 @@ fn main() {
                     "Invalid version: '{}'. Please use 'partitioned', 'global', 'DM' or a valid integer for EDF(k).",
                     version
                 );
-                // Handle the error (e.g., exit the program or return an error)
+                
                 std::process::exit(5); // Optional: Exit the program with an error code
             }
         }

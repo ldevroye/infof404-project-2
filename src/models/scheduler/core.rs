@@ -196,10 +196,8 @@ impl Core {
         return None;
     }
 
-
     pub fn simulate_partitionned(&mut self) -> SchedulingCode {
         if let Some(result_shortcut) = self.test_shortcuts() {
-            // println!("result != None : {:?}", result_shortcut);
             return result_shortcut;
         }
 

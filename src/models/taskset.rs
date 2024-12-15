@@ -122,8 +122,7 @@ impl TaskSet {
 
     pub fn feasibility_interval_global(&self) -> (TimeStep, TimeStep) {
         // [0, Omax + 2P]
-        return (0, 10_000_000);
-        
+
         let o_max = self.tasks.iter().map(|task| task.offset()).max().unwrap();
         let vec_period: Vec<TimeStep> = self.tasks.iter().map(|task| task.period()).collect();
         let p = multiple_lcm(vec_period);
