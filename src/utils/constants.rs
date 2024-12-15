@@ -1,10 +1,7 @@
-use crate::TimeStep;
-
-
 #[derive(PartialEq)]
 pub enum CoreValue {
     Running,
-    Commplete,
+    Complete,
     Missed,
 }
 
