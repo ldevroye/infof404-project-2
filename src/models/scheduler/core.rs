@@ -1,4 +1,4 @@
-use crate::constants::{CoreValue, EDFVersion};
+use crate::constants::{CoreValue, Version};
 use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID, Task};
 use crate::scheduler::{Scheduler};
 

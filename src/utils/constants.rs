@@ -19,10 +19,11 @@ pub enum SchedulingCode {
 
 
 #[derive(Debug, PartialEq)]
-pub enum EDFVersion {
+pub enum Version {
     Global,
     Partitioned,
     EDFk(usize),
+    GlobalDM,
 }
 
 #[derive(Debug)]

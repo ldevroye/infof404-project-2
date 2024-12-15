@@ -1,6 +1,6 @@
 use crate::models::job;
 use crate::{partition, Job, SchedulingCode, TaskSet, TimeStep, ID};
-use crate::constants::{CoreValue, EDFVersion, Heuristic};
+use crate::constants::{CoreValue, Version, Heuristic};
 use crate::scheduler::{Core};//, GlobalCore, PartitionnedCore} 
 
 use std::cmp::Ordering;
@@ -11,7 +11,7 @@ use std::thread::current;
 
 pub struct Scheduler{
     task_set: TaskSet,
-    version: EDFVersion,
+    version: Version,
     num_cores: usize,
     num_threads: usize,
     cores: Vec<Core>,
@@ -24,7 +24,7 @@ impl Scheduler {
     pub fn new(task_set: TaskSet, num_cores: usize, num_threads:usize, heuristic: String, sorting_order: String) -> Self {
         Self {
             task_set,
-            version : EDFVersion::Partitioned,
+            version : Version::Partitioned,
             num_cores,
             num_threads,
             cores: (1..=num_cores).map(|id| Core::new(id as ID)).collect(),
@@ -34,14 +34,14 @@ impl Scheduler {
 
         
     }
-    pub fn set_version(&mut self, new_version: EDFVersion) {
+    pub fn set_version(&mut self, new_version: Version) {
         self.version = new_version;
     }
 
     /// Returns the k of EDF(k) (or 1 if the version is not edf(k))
     pub fn get_k(&self) -> usize {
         match self.version {
-            EDFVersion::EDFk(value) => {value} 
+            Version::EDFk(value) => {value} 
             _ => {1} // edfk(1) = edf
         }
     }
@@ -502,8 +502,10 @@ impl Scheduler {
 
                 // Check if we should replace current job
                 if !current_core.is_assigned() ||
-                    (current_core.is_assigned() &&
-                    current_core.current_job_task_deadline().unwrap() > current_job.task_deadline())
+                    (!any_available_core &&
+                    current_core.is_assigned() &&
+                    current_core.current_job_task_deadline().unwrap() > current_job.task_deadline() &&
+                    current_core.current_job_deadline().is_some())
                 {
                     if current_core.is_assigned() {
                         current_core.remove(current_job.task_id());
@@ -516,7 +518,6 @@ impl Scheduler {
                 
             }
         
-
             // Simulate one time unit
             for index_core in 0..self.num_cores-1 {
                 let current_core = self.cores.get_mut(index_core).unwrap();
@@ -580,24 +581,30 @@ impl Scheduler {
 
     /// Hub function to chose which version to use
     pub fn test_task_set(&mut self) -> SchedulingCode {
-
+        let result: SchedulingCode;
         match self.version {
-            EDFVersion::EDFk(value) => {
-                return self.compute_edfk();
+            Version::EDFk(value) => {
+                result = self.compute_edfk();
             }
-            EDFVersion::Global => {
-                return self.compute_global();
+            Version::Global => {
+                result = self.compute_global();
             }
-            EDFVersion::Partitioned => {
-                return self.compute_partitionned();
+            Version::Partitioned => {
+                result = self.compute_partitionned();
+            }
+            Version::GlobalDM => {
+                result = self.compute_dm();
             }
 
             _ => {
                 eprintln!("Unknow EDF version");
-                SchedulingCode::CannotTell
+                return SchedulingCode::CannotTell;
             }
         }
 
+        let migrations: usize = self.cores.iter().map(|core| core.get_migrations()).sum();
+        print!("Number migrations : {}", migrations);
+        return result;
         
     }
 }

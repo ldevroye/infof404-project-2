@@ -8,7 +8,7 @@ use std::thread::available_parallelism;
 use clap::{Command, Arg, ArgMatches};
 use csv::ReaderBuilder;
 
-use multiprocessor::constants::EDFVersion;
+use multiprocessor::constants::Version;
 use multiprocessor::scheduler::{Scheduler, Core};
 
 
@@ -119,20 +119,25 @@ fn main() {
     let mut scheduler: Scheduler = Scheduler::new(taskset, core_number, thread_number, heuristic.clone(), sorting.clone());          
     match version.as_str() {
         "partitioned" => {
-            scheduler.set_version(EDFVersion::Partitioned);
+            scheduler.set_version(Version::Partitioned);
             println!("Partitioned");
         }
         "global" => {
-            scheduler.set_version(EDFVersion::Global);
+            scheduler.set_version(Version::Global);
             println!("Schedule Tasks (Global EDF)");
+        }
+        "DM" => {
+            scheduler.set_version(Version::GlobalDM);
+            println!("Schedule Tasks (Global DM)");
+
         }
         _ => { // assume k is an integer if not the other two
             if let Ok(k) = version.parse::<usize>() {
-                scheduler.set_version(EDFVersion::EDFk(k));
+                scheduler.set_version(Version::EDFk(k));
                 println!("Schedule Tasks (EDF({:?}))", k);
             } else {
                 eprintln!(
-                    "Invalid version: '{}'. Please use 'partitioned', 'global', or a valid integer for EDF(k).",
+                    "Invalid version: '{}'. Please use 'partitioned', 'global', 'DM' or a valid integer for EDF(k).",
                     version
                 );
                 // Handle the error (e.g., exit the program or return an error)
