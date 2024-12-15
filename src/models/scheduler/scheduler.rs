@@ -6,6 +6,7 @@ use crate::scheduler::{Core};//, GlobalCore, PartitionnedCore}
 use std::cmp::Ordering;
 use std::process::exit;
 use std::result;
+use std::thread::current;
 
 
 pub struct Scheduler{
@@ -37,18 +38,26 @@ impl Scheduler {
         self.version = new_version;
     }
 
+    /// Returns the k of EDF(k) (or 1 if the version is not edf(k))
+    pub fn get_k(&self) -> usize {
+        match self.version {
+            EDFVersion::EDFk(value) => {value} 
+            _ => {1} // edfk(1) = edf
+        }
+    }
 
+
+    /// Test if the taskset can be schedulable on global edf  
     pub fn check_global_edf_schedulability(&self) -> bool {
         let num_cores_f64 = self.num_cores as f64;
         self.task_set.utilisation() <= num_cores_f64 - (num_cores_f64 - 1.0) * self.task_set.max_utilisation()
 
     }
 
+    /// Test if the taskset can be schedulable on edf k
     pub fn check_edf_k_schedulability(&self) -> bool {
-        let k = match self.version {
-            EDFVersion::EDFk(value) => {value} 
-            _ => {1} // edfk(1) = edf
-        };
+        
+        let k = self.get_k();
 
         if k >= self.task_set.len() - 1 {
             return false;
@@ -266,8 +275,9 @@ impl Scheduler {
         */
     }
 
+
     /// edf_k job scheduling : gives at most one job_id per processor
-    pub fn schedule_jobs(queue: &Vec<Job>, k: usize) -> Option<ID> {
+    pub fn schedule_jobs(queue: &Vec<(Job, usize)>, k: usize) -> Option<ID> {
 
         // normal edf scheduling
 
@@ -280,7 +290,7 @@ impl Scheduler {
         if queue.len() == 0 {
             return None;
         }
-        let mut smallest = queue[0].absolute_deadline();
+        let mut smallest = queue[0].0.absolute_deadline();
         let mut index_to_ret: ID = 0;
 
         // Iterate over the jobs to find the one with the earliest absolute deadline.
@@ -288,7 +298,7 @@ impl Scheduler {
         for i in 0..jobs_size {
             if smallest == TimeStep::MIN {break;}
 
-            let current_deadline = queue[i].absolute_deadline();
+            let current_deadline = queue[i].0.absolute_deadline();
             if current_deadline < smallest {
                 smallest = current_deadline;
                 index_to_ret = i as ID;
@@ -299,23 +309,22 @@ impl Scheduler {
 
     }
     
+    
+
     pub fn compute_edfk(&mut self) -> SchedulingCode {
 
-        let k = match self.version {
-            EDFVersion::EDFk(value) => {value}
-            _ => {1}
-        };
-
-        let mut result = SchedulingCode::SchedulableShortcut;
         if ! self.check_edf_k_schedulability() {
             return SchedulingCode::UnschedulableShortcut;
         }
-        
+
+        let k = self.get_k();
+        let mut result = SchedulingCode::SchedulableShortcut;
         let mut time: TimeStep = 0;
         let max_time: TimeStep = self.task_set.feasibility_interval().1;
 
         while time < max_time {
-            let mut queue: Vec<Job> = Vec::new();
+            let mut queue: Vec<(Job, ID)> = Vec::new();
+            let mut assigned: Vec<(ID, ID)> = Vec::new(); // task_id, core_id
             let mut job_to_add = self.task_set.release_jobs(time);
 
             // set the jobs with 
@@ -325,26 +334,51 @@ impl Scheduler {
                 }
             }
 
-            queue.extend(job_to_add);
+            queue.extend(job_to_add.into_iter().map(|job| (job, 0)));
+            let remaining:Vec<Job> = queue.clone().into_iter().map(|(job, _)| job).collect();
             
-
+            // try to add 1 job with lowest prio to each core
             for index_core in 0..self.num_cores-1 {
-                if queue.is_empty() {break;}
-
                 let current_core = self.cores.get_mut(index_core).unwrap();
-                let elected_index: ID = Scheduler::schedule_jobs(&queue, k).unwrap();
 
-                let current_job = queue.get(elected_index).unwrap();
-
-                // check if assigned 
-                // TODO check if the job has lower priority then replace
-                // 
-                if !current_core.is_assigned() {
-                    current_core.add_job(current_job.clone(), self.task_set.get_task_by_id(current_job.task_id()).unwrap().clone())
+                // if queue empty or the job in the core is already == -inf
+                if queue.is_empty() || 
+                (current_core.current_job_is_inf().is_some() &&
+                current_core.current_job_is_inf().unwrap()) {
+                    break;
                 }
 
-                queue.remove(elected_index);
+                let elected_index: ID = Scheduler::schedule_jobs(&queue, k).unwrap();
+                let (current_job, core_id) = queue.get_mut(elected_index).unwrap();
 
+                // check if the core is not assigned 
+                // or if the deadline of the new_job is < than the job already in the core 
+                if !current_core.is_assigned() || 
+                (current_core.is_assigned() && 
+                  (current_core.current_job_deadline().is_some() &&
+                  current_core.current_job_deadline().unwrap() > current_job.absolute_deadline())) {
+
+
+                    if current_core.is_assigned() { 
+                        current_core.remove(current_job.task_id());
+                    }
+
+                    *core_id = current_core.id(); // swap or put the current_core_id
+
+                    let task_clone = self.task_set.get_task_by_id(current_job.task_id()).unwrap().clone();
+                    current_core.add_job(current_job.clone(), task_clone);
+
+                }
+            }
+
+            // simulate 1 step
+            for index_core in 0..self.num_cores-1 {
+
+                let current_core = self.cores.get_mut(index_core).unwrap();
+
+                current_core.simulate_step(k);
+                
+                
             }
 
             time += 1
@@ -352,28 +386,9 @@ impl Scheduler {
 
         return SchedulingCode::CannotTell;
 
-        // looks like Core.simulate()
-        /* 
-        if let Some(result_shortcut) = self.test_shortcuts() {
-            // println!("result != None : {:?}", result_shortcut);
-            return result_shortcut;
-        }
-
-        let mut queue: Vec<Job> = Vec::new();
-        let feasibility_interval = self.task_set.feasibility_interval(&self.task_set).1;
-        
-        while self.current_time < feasibility_interval {
-
-            let result = self.simulate_step(1);
-            if result != None {
-                return result.unwrap();
-            }    
-        }
-        
-        */
-        
-        return result;
     }
+
+
 
     pub fn compute_global(&mut self) -> SchedulingCode {
         let mut result = SchedulingCode::SchedulableShortcut;

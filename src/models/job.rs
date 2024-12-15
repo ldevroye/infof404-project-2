@@ -48,6 +48,10 @@ impl Job {
         self.show_absolute_deadline = TimeStep::MIN;
     }
 
+    pub fn is_deadline_inf(&self) -> bool {
+        self.show_absolute_deadline == TimeStep::MIN
+    }
+
     pub fn deadline_missed(&self, t: TimeStep) -> bool {
         self.remaining_time > 0 && t >= self.real_absolute_deadline
     }

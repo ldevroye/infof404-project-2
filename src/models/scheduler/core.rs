@@ -46,16 +46,16 @@ impl Core {
     }
 
     pub fn is_assigned(&self) -> bool {
-        self.task_set.len() > 0
+        !self.task_set.is_empty()
     }
 
     /// Try to add a task to the core if the utilisation is not < 0 after the add
     /// 
     /// Returns wether the task could be added or not
     pub fn add(&mut self, task: Task) -> bool {
-        /*if self.utilisation_left - task.utilisation() <= 0.0 {
+        if self.utilisation_left - task.utilisation() <= 0.0 {
             return false;
-        }*/
+        }
 
         self.utilisation_left -= task.utilisation();
         self.migrate(task.id());
@@ -67,6 +67,27 @@ impl Core {
     pub fn add_job(&mut self, job: Job, task:Task) {
         self.queue.push(job);
         self.add(task);
+    }
+
+    pub fn get_current_task_id(&self) -> Option<ID> {
+        self.task_set.get_first_task_id()
+    }
+
+
+    pub fn current_job_deadline(&self) -> Option<TimeStep> {
+        if self.task_set.is_empty() {
+            return None;
+        }
+
+        Some(self.queue[0].absolute_deadline())
+    }
+
+    pub fn current_job_is_inf(&self) -> Option<bool> {
+        if self.task_set.is_empty() {
+            return None;
+        }
+
+        Some(self.queue[0].is_deadline_inf())
     }
 
     /// Remove
@@ -166,6 +187,9 @@ impl Core {
         
         while self.current_time < self.feasibility_interval.unwrap() {
 
+            // Try to release new jobs at current_time
+            self.queue.extend(self.task_set.release_jobs(self.current_time));
+
             let result = self.simulate_step(1);
             if result != None {
                 return result.unwrap();
@@ -184,15 +208,7 @@ impl Core {
     /// * 'k' the k for edf_k (if set to 1 then it is equal to edf normal)
     pub fn simulate_step(&mut self, k: usize) -> Option<SchedulingCode> {
 
-        if self.feasibility_interval == None { // interval not determined yet
-            self.set_feasibility_interval();
-
-        } else if self.current_time >= self.feasibility_interval.unwrap() { // end of sim
-            return Some(SchedulingCode::CannotTell);
-        }
-
-        // Try to release new jobs at time `t`
-        self.queue.extend(self.task_set.release_jobs(self.current_time));
+        println!("time {:?} id {}", self.current_time, self.id);
         
         // Check for missed deadlines
         if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {

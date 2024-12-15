@@ -30,6 +30,14 @@ impl TaskSet {
         self.tasks.is_empty()
     }
 
+    pub fn get_first_task_id(&self) -> Option<ID> {
+        if self.is_empty() {
+            return None;
+        } 
+
+        Some(self.tasks[0].id())
+    }
+
     /// try to release a job a 'current_time', if it does -> (New Job, task_id)
     pub fn release_jobs(&mut self, current_time: TimeStep) -> Vec<Job> {
         self.tasks
