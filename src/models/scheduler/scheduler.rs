@@ -390,10 +390,6 @@ impl Scheduler {
             for index_core in 0..self.num_cores-1 {
 
                 let current_core = self.cores.get_mut(index_core).unwrap();
-                
-                if !current_core.is_assigned() {
-                    continue;
-                }
 
                 let resp = current_core.simulate_step(k);
                 if resp == CoreValue::Missed {
@@ -410,6 +406,7 @@ impl Scheduler {
                 if *id == 0 { // unhandled
                     if job.deadline_missed(time) {
                         result = SchedulingCode::UnschedulableSimulated;
+                        println!("Unhandled deadline missed ({}) at time {}, task_id {}", job.task_deadline()+time, time, job.task_id());
                         break;
                     }
                 }
