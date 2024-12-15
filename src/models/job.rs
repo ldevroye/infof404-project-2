@@ -8,7 +8,8 @@ pub struct Job {
     task_id: ID,                    // Identifier for the associated task
     task_deadline: TimeStep,        // Deadline for the task
     remaining_time: TimeStep,       // Remaining execution time for the job
-    absolute_deadline: TimeStep,    // Absolute deadline for the job (including offsets)
+    real_absolute_deadline: TimeStep,    // Absolute deadline for the job (including offsets)
+    show_absolute_deadline: TimeStep,    // the deadline to show for edf k
 }
 
 impl Job {
@@ -18,7 +19,8 @@ impl Job {
             task_id,
             task_deadline,
             remaining_time,
-            absolute_deadline,
+            real_absolute_deadline: absolute_deadline,
+            show_absolute_deadline: absolute_deadline,
         }
     }
 
@@ -39,18 +41,22 @@ impl Job {
     }
 
     pub fn absolute_deadline(&self) -> TimeStep {
-        self.absolute_deadline
+        self.show_absolute_deadline
+    }
+
+    pub fn set_deadline_inf(&mut self) {
+        self.show_absolute_deadline = TimeStep::MIN;
     }
 
     pub fn deadline_missed(&self, t: TimeStep) -> bool {
-        self.remaining_time > 0 && t >= self.absolute_deadline
+        self.remaining_time > 0 && t >= self.real_absolute_deadline
     }
 
     pub fn is_complete(&self) -> bool {
         self.remaining_time == 0
     }
 
-    pub fn schedule(&mut self, n_steps: TimeStep) {
-        self.remaining_time -= n_steps;
+    pub fn schedule(&mut self) {
+        self.remaining_time -= 1;
     }
 }

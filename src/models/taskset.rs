@@ -1,4 +1,6 @@
 
+use core::task;
+
 use super::{Job, Task, TimeStep, ID};
 
 #[derive(Debug, Clone)]
@@ -28,6 +30,7 @@ impl TaskSet {
         self.tasks.is_empty()
     }
 
+    /// try to release a job a 'current_time', if it does -> (New Job, task_id)
     pub fn release_jobs(&mut self, current_time: TimeStep) -> Vec<Job> {
         self.tasks
             .iter_mut()
@@ -109,11 +112,11 @@ impl TaskSet {
     }
 
 
-    pub fn feasibility_interval(&self, taskset: &TaskSet) -> (TimeStep, TimeStep) {
+    pub fn feasibility_interval(&self) -> (TimeStep, TimeStep) {
         // [Omax, Omax + 2P]
 
         
-        let w_0 = taskset
+        let w_0 = self.tasks
             .iter()
             .map(|task| task.wcet())
             .sum::<TimeStep>();
@@ -121,7 +124,7 @@ impl TaskSet {
         let mut w_k = w_0;
 
         loop {
-            let w_k_next = taskset
+            let w_k_next = self.tasks
                 .iter()
                 .map(|task| {
                     let ceiling_term = (w_k + task.period() - 1) / task.period();

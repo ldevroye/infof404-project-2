@@ -9,6 +9,6 @@ pub use task::Task;
 pub use taskset::TaskSet;
 pub use partition::Partition;
 
-pub type TimeStep = usize;
+pub type TimeStep = isize;
 
-pub type ID = u32;
+pub type ID = usize;
