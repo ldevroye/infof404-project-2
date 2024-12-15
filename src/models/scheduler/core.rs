@@ -240,7 +240,7 @@ impl Core {
 
                 // Filter out completed jobs and free the task_id of the core
                 if job.is_complete() {
-                    println!("complete {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, job.task_id(), job.id());
+                    //println!("complete {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, job.task_id(), job.id());
 
                     self.task_set.retain_not(job.task_id());
                     self.queue.remove(0);

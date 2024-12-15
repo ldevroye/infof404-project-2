@@ -357,7 +357,6 @@ impl Scheduler {
                     break;
                 }
 
-
                 let elected_index: ID = result.unwrap();
 
                 let (current_job, core_id) = queue.get_mut(elected_index).unwrap();
@@ -395,6 +394,7 @@ impl Scheduler {
                 let resp = current_core.simulate_step(k);
                 if resp == CoreValue::Missed {
                     result = SchedulingCode::UnschedulableSimulated;
+                    break;
                     
                 } else if resp == CoreValue::Commplete {
                     // remove the job complete from queue
