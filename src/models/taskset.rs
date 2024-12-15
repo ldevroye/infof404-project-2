@@ -1,5 +1,6 @@
 
 use core::task;
+use crate::multiple_lcm;
 
 use super::{Job, Task, TimeStep, ID};
 
@@ -119,11 +120,17 @@ impl TaskSet {
         false
     }
 
+    pub fn feasibility_interval_global(&self) -> (TimeStep, TimeStep) {
+        // [0, Omax + 2P]
 
-    pub fn feasibility_interval(&self) -> (TimeStep, TimeStep) {
-        // [Omax, Omax + 2P]
+        let o_max = self.tasks.iter().map(|task| task.offset()).max().unwrap();
+        let vec_period: Vec<TimeStep> = self.tasks.iter().map(|task| task.period()).collect();
+        let p = multiple_lcm(vec_period);
 
-        return (0,1000);
+        return (0, o_max+(2*p));
+    }
+
+    pub fn feasibility_interval_part(&self) -> (TimeStep, TimeStep) {
 
         let w_0 = self.tasks
             .iter()

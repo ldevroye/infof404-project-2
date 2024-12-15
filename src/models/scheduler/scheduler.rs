@@ -285,7 +285,6 @@ impl Scheduler {
             return None;
         }
 
-
         let mut smallest = TimeStep::MAX;
         let mut index_to_ret: Option<ID> = None;
 
@@ -322,7 +321,10 @@ impl Scheduler {
         let mut queue: Vec<(Job, ID)> = Vec::new();
         let mut result = SchedulingCode::SchedulableSimulated;
         
-        let (mut time, max_time) = self.task_set.feasibility_interval();
+        let (mut time, max_time) = self.task_set.feasibility_interval_global();
+        println!("interval : [{:?}, {:#?}]", time, max_time);
+
+        self.cores.iter_mut().for_each(|core| core.set_time(time));
 
         while time < max_time {
             let mut job_to_add = self.task_set.release_jobs(time);
@@ -336,8 +338,6 @@ impl Scheduler {
 
             // cores have id >= 1 so 0 = not handled
             queue.extend(job_to_add.into_iter().map(|job| (job, 0))); 
-
-            //println!("QUEUE FIRST at time {} {:#?}", time, queue);
             
             // try to add 1 job with lowest prio to each core
             for index_core in 0..self.num_cores-1 {
@@ -400,8 +400,6 @@ impl Scheduler {
 
             }
 
-            //println!("QUEUE BEFORE at time {} {:#?}", time, self.cores);
-
             // simulate 1 step in each cores
             for index_core in 0..self.num_cores-1 {
 
@@ -421,8 +419,6 @@ impl Scheduler {
                 }
             }
 
-            //println!("QUEUE AFTER at time {} {:#?}", time, queue);
-
             // test_deadlines for each jobs not handled
             for (job, id) in queue.iter() {
                 if *id == 0 { // unhandled
@@ -435,16 +431,13 @@ impl Scheduler {
             }
 
             if result == SchedulingCode::UnschedulableSimulated {
-                print!("break");
                 break;
             } 
 
             time += 1;
-            //if time > 6 {break;}
-            println!("scheduler time : {}", time);
+
         }
 
-        println!("bah kwa");
         return result;
 
     }
@@ -452,8 +445,138 @@ impl Scheduler {
 
 
     pub fn compute_global(&mut self) -> SchedulingCode {
+        if !self.check_global_edf_schedulability() {
+            return SchedulingCode::UnschedulableShortcut;
+        }
+
         self.compute_edfk() // k will be 1
     }
+
+
+    /// DM (Deadline Monotonic) scheduling inspired by compute_edfk.
+    pub fn compute_dm(&mut self) -> SchedulingCode {
+
+        self.task_set.get_tasks_mut().sort_by(|a, b| a.deadline().cmp(&b.deadline()));
+
+        let mut result = SchedulingCode::CannotTell;
+        
+        let (mut time, max_time) = self.task_set.feasibility_interval_global();
+        println!("time : [{},{}]", time, max_time);
+
+        while time < max_time {
+            // Release jobs that arrive at 'time'
+            let mut job_to_add = self.task_set.release_jobs(time);
+
+            // For DM, priorities are fixed based on deadline order determined above.
+            let mut queue: Vec<(Job, ID)> = job_to_add.into_iter().map(|job| (job, 0)).collect();
+
+            // Assign jobs to cores
+            for index_core in 0..self.num_cores-1 {
+                let any_available_core = self.cores.iter().any(|core| !core.is_assigned());
+                let current_core = self.cores.get_mut(index_core).unwrap();
+
+                // if queue empty or the job in the core is already == -inf
+                if queue.is_empty() {
+                    break;
+                } else if (current_core.current_job_is_inf().is_some()) {
+                    if current_core.current_job_is_inf().unwrap() {
+                        continue;
+                    }
+                }
+
+                let result_schedule = Scheduler::schedule_jobs_dm(&queue);
+                if result_schedule.is_none() { // there is no job not handleled by a core
+                    break;
+                }
+
+                let elected_index: ID = result_schedule.unwrap();
+
+                // Extract the `current_job` and `core_id` without holding a mutable borrow
+                let (current_job, core_id) = {
+                    let (job, core) = queue.get_mut(elected_index).unwrap();
+                    (job.clone(), *core)
+                };
+
+            
+                let (current_job, core_id) = &mut queue[elected_index];
+
+                // Check if we should replace current job
+                if !current_core.is_assigned() ||
+                    (current_core.is_assigned() &&
+                    current_core.current_job_task_deadline().unwrap() > current_job.task_deadline())
+                {
+                    if current_core.is_assigned() {
+                        current_core.remove(current_job.task_id());
+                    }
+
+                    *core_id = current_core.id();
+                    let task_clone = self.task_set.get_task_by_id(current_job.task_id()).unwrap().clone();
+                    current_core.add_job(current_job.clone(), task_clone);
+                }
+                
+            }
+        
+
+            // Simulate one time unit
+            for index_core in 0..self.num_cores-1 {
+                let current_core = self.cores.get_mut(index_core).unwrap();
+                let resp = current_core.simulate_step(1);
+
+                if resp == CoreValue::Missed {
+                    result = SchedulingCode::UnschedulableSimulated;
+                } else if resp == CoreValue::Commplete {
+                    // Remove completed jobs from queue
+                    queue.retain(|(_, id)| *id != current_core.id());
+                }
+            }
+
+            // Check deadlines for unhandled jobs
+            for (job, id) in &queue {
+                if *id == 0 && job.deadline_missed(time) {
+                    result = SchedulingCode::UnschedulableSimulated;
+                    break;
+                }
+            }
+
+            if result == SchedulingCode::UnschedulableSimulated {
+                break;
+            }
+
+            time += 1;
+        }
+
+        result
+    }
+
+
+
+
+    /// Helper function for DM to pick the job with the highest priority (lowest relative deadline task).
+    fn schedule_jobs_dm(queue: &Vec<(Job, ID)>) -> Option<ID> {
+        if queue.is_empty() {
+            return None;
+        }
+
+        let mut best_priority = TimeStep::MAX;
+        let mut index_to_ret: Option<ID> = None;
+
+        for (i, (job, core_id)) in queue.iter().enumerate() {
+            if *core_id != 0 {
+                // Already taken by a core
+                continue;
+            }
+
+            // Get task priority (ie, task deadline)
+            let task_priority = queue.iter().map(|(job, _)| job.task_deadline()).min().unwrap();
+            if task_priority < best_priority {
+                best_priority = task_priority;
+                index_to_ret = Some(i as ID);
+            }
+        }
+
+        index_to_ret
+    }
+
 
     /// Hub function to chose which version to use
     pub fn test_task_set(&mut self) -> SchedulingCode {

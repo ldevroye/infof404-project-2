@@ -100,6 +100,14 @@ impl Core {
         Some(self.queue[0].is_deadline_inf())
     }
 
+    pub fn current_job_task_deadline(&self) -> Option<TimeStep> {
+        if self.task_set.is_empty() {
+            return None;
+        }
+
+        Some(self.queue[0].task_deadline())
+    }
+
     /// Remove
     pub fn remove(&mut self, task_id: ID) {
         if !self.task_set.task_exists(task_id) {return;}
@@ -124,6 +132,12 @@ impl Core {
     pub fn id(&self) -> ID {
         self.id
     }
+
+    pub fn set_time(&mut self, new: TimeStep) {
+        self.current_time = new;
+    }
+
+   
 
     pub fn schedule(&self, k: usize) -> Option<ID> {
         // create a vector of (task_id, job_id) of all the jobs smaller than k
@@ -183,18 +197,13 @@ impl Core {
     }
 
 
-    pub fn set_feasibility_interval(&mut self) {
-        self.feasibility_interval = Some(self.task_set.feasibility_interval().1);
-    }
-
-
     pub fn simulate_partitionned(&mut self) -> SchedulingCode {
         if let Some(result_shortcut) = self.test_shortcuts() {
             // println!("result != None : {:?}", result_shortcut);
             return result_shortcut;
         }
 
-        self.set_feasibility_interval();
+        self.feasibility_interval = Some(self.task_set.feasibility_interval_part().1);
         
         while self.current_time < self.feasibility_interval.unwrap() {
 
