@@ -1,5 +1,5 @@
 use std::ops::{Index, IndexMut};
-use crate::TaskSet;
+use crate::*;
 
 /// A partition represents a collection of task sets distributed across processors.
 #[derive(Debug)]

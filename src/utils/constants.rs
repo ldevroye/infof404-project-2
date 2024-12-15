@@ -8,7 +8,7 @@ pub enum CoreValue {
     Missed,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SchedulingCode {
     SchedulableSimulated = 0,
     SchedulableShortcut = 1,
@@ -18,7 +18,7 @@ pub enum SchedulingCode {
     Error = 5,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Version {
     GlobalEDF,
     PartitionEDF,
@@ -38,7 +38,7 @@ impl Version {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Heuristic {
     FirstFit,
     NextFit,
@@ -58,7 +58,7 @@ impl Heuristic {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Sorting {
     IncreasingUtilization,
     DecreasingUtilization,

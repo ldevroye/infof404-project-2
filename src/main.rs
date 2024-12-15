@@ -1,13 +1,12 @@
-use std::error::Error;
-use std::{process, result};
 use std::thread::available_parallelism;
-
+use std::error::Error;
+use std::process;
 use clap::{Command, Arg, ArgMatches};
 use csv::ReaderBuilder;
 
-use multiprocessor::constants::{Heuristic, Sorting, TimeStep, Version};
-use multiprocessor::scheduler::{self, Scheduler};
-use multiprocessor::{SchedulingCode, Task, TaskSet};
+use multiprocessor::constants::{Heuristic, Sorting, TimeStep, Version, SchedulingCode};
+use multiprocessor::scheduler::*;
+use multiprocessor::{Task, TaskSet};
 
 /// Reads a task set file and returns a `TaskSet`.
 /// 
@@ -86,7 +85,7 @@ fn main() {
         Ok(taskset) => taskset,
         Err(e) => {
             eprintln!("Error reading task file: {}", e);
-            process::exit(SchedulingCode::Error); // Exit with an error code if task file reading fails
+            process::exit(SchedulingCode::Error as i32); // Exit with an error code if task file reading fails
         }
     };
 
@@ -99,24 +98,24 @@ fn main() {
     let sorting = matches.get_one::<Sorting>("sorting").unwrap();
 
     // Create the scheduler and run the simulation based on the selected EDF version
-    let mut scheduler;
+    let mut scheduler: Box<dyn Scheduler>;
 
     match version {
         Version::GlobalEDF => {
-            unimplemented!("Global EDF not yet implemented");
+            scheduler = Box::new(GlobalEDFScheduler::new(taskset, core_number));
         }
         Version::PartitionEDF => {
-            unimplemented!("Partition EDF not yet implemented");
+            scheduler = Box::new(PartitionEDFScheduler::new(taskset, core_number, thread_number, heuristic.clone(), sorting.clone()));
         }
         Version::EDFk(k) => {
-            unimplemented!("EDF(k) not yet implemented");
+            scheduler = Box::new(EDFkScheduler::new(taskset, core_number, *k));
         }
         Version::GlobalDM => {
-            unimplemented!("Global DM not yet implemented");
+            scheduler = Box::new(DMScheduler::new(taskset, core_number));
         }        
     }
 
     // Run the simulation and exit with the result
     let result = scheduler.run_simulation();
-    process::exit(result);
+    process::exit(result as i32);
 }
