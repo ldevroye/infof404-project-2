@@ -1,6 +1,13 @@
 # INFO-F404 Multiprocessor Scheduling Project
 
 In this second project, we consider the case of asynchronous tasks with arbitrary deadlines in the scope of multiprocessor scheduling with *m* identical cores. The objective of this project is to build a multithreaded (or multi-processed) tool that checks the schedulability of task sets according to different real-time multiprocessor scheduling algorithms.
+## Authors (15-12-24)
+* Zoé Moeremans
+* Alban Linchet Martinez
+* Louis Devroye
+  
+## License (MIT)
+The authors are not accountable for any derivation of this product.
 
 ## Running the program
 
