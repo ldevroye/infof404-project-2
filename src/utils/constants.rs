@@ -5,7 +5,7 @@ pub enum CoreValue {
     Missed,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SchedulingCode {
     SchedulableSimulated = 0,
     SchedulableShortcut = 1,

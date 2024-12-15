@@ -3,8 +3,8 @@ use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID, Task};
 
 use std::collections::HashMap;
 
-/// Represents a single core in the scheduling system.
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 pub struct Core {
     id: ID,                             // Unique identifier for the core
     map_migrations: HashMap<ID, usize>, // Maps task ID to the number of migrations performed
@@ -247,6 +247,7 @@ impl Core {
 
             // Check for missed deadlines
             if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
+                println!("Missed at time {:?} on {}", self.current_time, self.id);
                 return SchedulingCode::UnschedulableSimulated;
             }
 
@@ -259,7 +260,8 @@ impl Core {
 
             // Remove completed jobs from the queue
             self.queue.retain(|job| !job.is_complete());
-
+            
+            println!("Time {} on {}", self.current_time, self.id);
             self.current_time += 1;
         }
 
