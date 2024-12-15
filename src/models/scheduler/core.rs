@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Core {
     id: ID,                             // Unique identifier 
     map_migrations: HashMap<ID, usize>, // map : task -> number migration done        
@@ -211,7 +211,7 @@ impl Core {
             self.queue.extend(self.task_set.release_jobs(self.current_time));
 
             if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
-                println!("time {:?}", self.current_time);
+                println!("Missed at time {:?} on {}", self.current_time, self.id);
                 return SchedulingCode::UnschedulableSimulated;
             }
     
@@ -223,7 +223,8 @@ impl Core {
     
             // Filter out completed jobs
             self.queue.retain(|job| !job.is_complete());
-    
+            
+            println!("Time {} on {}", self.current_time, self.id);
             self.current_time += 1;
     
         }

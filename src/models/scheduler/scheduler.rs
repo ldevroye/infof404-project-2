@@ -5,7 +5,8 @@ use crate::scheduler::{Core};//, GlobalCore, PartitionnedCore}
 
 use std::cmp::Ordering;
 use std::process::exit;
-use std::result;
+use std::{result, thread};
+use std::sync::{Arc, Mutex};
 use std::thread::current;
 
 
@@ -172,8 +173,8 @@ impl Scheduler {
         let num_task_computed:usize = partitions.iter().map(|taskset| taskset.len()).sum();
     
         if num_task > num_task_computed {
-            eprintln!("Too much task ({:?}, {:?} attached to a processor) for the {:?} processors", num_task, num_task_computed, self.num_cores);
             println!("{:#?}", partitions);
+            eprintln!("Too much task ({:?}, {:?} attached to a processor) for the {:?} processors", num_task, num_task_computed, self.num_cores);
             exit(SchedulingCode::UnschedulableShortcut as i32)
         }
         partitions
@@ -182,46 +183,78 @@ impl Scheduler {
 
     /// Main function for the partitionned EDF
     pub fn compute_partitionned(&mut self) -> SchedulingCode {
-        let mut processor_done = 0 as usize;
-        let mut thread_running = 0 as usize;
-    
-        // Allow parameters to another fn()
-        //let partition_mutex = Arc::new(Mutex::new(partition));
-    
-        // Use Arc to share ownership of partition across threads
-        //let threads_mutex: Arc<Mutex<Vec<thread::JoinHandle<()>>>> = Arc::new(Mutex::new(vec![]));
+        let mut thread_running = 0; // Tracks threads actively running
 
         let partition = self.partition_tasks();
-        // println!("Partition : {:#?}", partition);
-
-        // clone so that the scheduler and the the cores have different tasksets
-        self.cores = (1..=self.num_cores)
-        .map(|id| Core::new_task_set(id as ID, partition[id-1].clone()))
-        .collect(); 
     
+        // Clone task sets for each core
+        self.cores = (1..=self.num_cores)
+            .map(|id| Core::new_task_set(id as ID, partition[id - 1].clone()))
+            .collect();
         println!("Cores : {:#?}", self.cores);
-
+    
         let mut result = SchedulingCode::SchedulableShortcut;
-
-        while processor_done < self.num_cores {
-            let current_core = self.cores.get_mut(processor_done).unwrap();
-            let resp = current_core.simulate_partitionned();            
-
-            // if any is not schedulable then -> not schedulable
-            if ! (resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) { 
-                println!("Taskset not schedulable");
-                return resp;
-            }
+    
+        // Use a shared counter to track completed cores
+        let num_core_done = Arc::new(Mutex::new(0));
+    
+        // Wrap cores in an `Arc<Mutex<_>>` for shared access across threads
+        let core_clone = self.cores.clone();
+        let cores = Arc::new(Mutex::new(core_clone));
+        let num_cores = self.num_cores;
+    
+        // Shared result state to aggregate scheduling results
+        let result_shared = Arc::new(Mutex::new(SchedulingCode::SchedulableShortcut));
+    
+        // Spawn threads to process cores
+        let mut handles = Vec::new();
+        for _ in 1..self.num_threads {
+            let num_core_done = Arc::clone(&num_core_done);
+            let cores = Arc::clone(&cores);
+            let result_shared = Arc::clone(&result_shared);
+    
+            let handle = thread::spawn(move || {
+                loop {
+                    let mut done = num_core_done.lock().unwrap();
+                    if *done >= num_cores {
+                        break; // All cores have been processed
+                    }
             
-            // if any has to be simulated then -> ok simulated
-            if resp == SchedulingCode::SchedulableSimulated {
-                result = resp
-            } 
+                    // Get the next core to process
+                    let core_id = *done;
+                    *done += 1; // Mark core as being processed
+                    drop(done); // Release lock before processing
             
-            processor_done += 1;
+                    let mut cores_guard = cores.lock().unwrap();
+                    if let Some(current_core) = cores_guard.get_mut(core_id) {
+                        // Directly access the core safely
+                        let resp = current_core.simulate_partitionned();
+            
+                        let mut result_lock = result_shared.lock().unwrap();
+                        if !(resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) {
+                            println!("Taskset not schedulable");
+                            *result_lock = resp;
+                        } else if resp == SchedulingCode::SchedulableSimulated {
+                            *result_lock = SchedulingCode::SchedulableSimulated;
+                        }
+                        drop(result_lock); // Release the result lock
+                    } else {
+                        println!("Error: Could not get core with id {}", core_id);
+                    }
+                }
+            });
+    
+            handles.push(handle);
         }
-
-        return result;
+    
+        // Wait for all threads to finish
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    
+        // Return the aggregated result
+        let final_result = result_shared.lock().unwrap();
+        return final_result.clone();
 
             /* 
             {
@@ -313,7 +346,7 @@ impl Scheduler {
     /// compute the task set among all the cores using edf(k), with possible migrations inbetween cores during the simulation
     pub fn compute_edfk(&mut self) -> SchedulingCode {
 
-        if ! self.check_edf_k_schedulability() {
+        if !self.check_edf_k_schedulability() {
             return SchedulingCode::UnschedulableShortcut;
         }
 
@@ -613,7 +646,7 @@ impl Scheduler {
         }
 
         let migrations: usize = self.cores.iter().map(|core| core.get_migrations()).sum();
-        print!("Number migrations : {}", migrations);
+        println!("Number migrations : {}", migrations);
         return result;
         
     }
