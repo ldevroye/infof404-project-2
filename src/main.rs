@@ -1,25 +1,24 @@
 use std::error::Error;
-use std::process::exit;
-use std::{iter, process};
-use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::process;
 use std::thread::available_parallelism;
 
-use clap::{Command, Arg, ArgMatches};
+use clap::{Arg, ArgMatches, Command};
 use csv::ReaderBuilder;
 
-use multiprocessor::constants::EDFVersion;
-use multiprocessor::scheduler::{Scheduler, Core};
+use multiprocessor::constants::{Heuristic, Sorting};
+use multiprocessor::scheduler::{Scheduler, PartitionScheduler};
+use multiprocessor::{SchedulingCode, Task, TaskSet, TimeStep};
 
-
-use multiprocessor::{partition, Partition, SchedulingCode, Task, TaskSet, TimeStep,};
-
-
-/// Reads a task set file and returns a `TaskSet`
-pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
+/// Reads a task set file and returns a `TaskSet`.
+/// 
+/// # Arguments
+/// * `file_path` - Path to the task file.
+///
+/// # Returns
+/// A `Result` containing a `TaskSet` if successful, or an error if parsing fails.
+pub fn read_task_file(file_path: &str) -> Result<TaskSet, Box<dyn Error>> {
     let mut rdr = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
     let mut tasks = Vec::new();
-
     let mut id = 1;
 
     for result in rdr.records() {
@@ -37,121 +36,127 @@ pub fn read_task_file(file_path: &String) -> Result<TaskSet, Box<dyn Error>> {
     Ok(TaskSet::new(tasks))
 }
 
+/// Builds the command-line interface using Clap.
+///
+/// # Returns
+/// A `Command` that defines the CLI structure.
 pub fn build_cli_command() -> Command {
     Command::new("EDF Scheduler")
-    .version("1.0")
-    .author("Your Name <your_email@example.com>")
-    .about("Simulates EDF scheduling for task sets")
-    .disable_version_flag(true)
-    .disable_help_flag(true)
-    
-    .arg(Arg::new("task_file")
-    .required(true)
-    .help("Path to the task set file"))
-
-    .arg(Arg::new("m")
-        .required(true)
-        .help("Number of cores"))
-
-    .arg(Arg::new("version")
-        .short('v')
-        .long("version")
-        .required(true)
-        .help("Version of EDF to use (global, partitioned, or EDF(k))"))
-        //.value_parser(["global", "partitioned", "k"]))
-        
-    .arg(Arg::new("workers")
-        .short('w')
-        .long("workers")
-        .help("Number of workers to run the simulation")
-        .default_value("4"))
-
-    .arg(Arg::new("heuristic")
-        .short('h')
-        .long("heuristic")
-        .help("Heuristic to use for partitioned scheduling")
-        .value_parser(["ff", "nf", "bf", "wf"]))
-
-    .arg(Arg::new("sorting")
-        .short('s')
-        .long("sorting")
-        .help("Task ordering based on utilization")
-        .value_parser(["iu", "du"]))
+        .disable_version_flag(true)
+        .disable_help_flag(true)
+        .arg(
+            Arg::new("task_file")
+                .required(true)
+                .help("Path to the task set file"),
+        )
+        .arg(
+            Arg::new("m")
+                .required(true)
+                .help("Number of cores"),
+        )
+        .arg(
+            Arg::new("version")
+                .short('v')
+                .long("version")
+                .required(true)
+                .help("Version of EDF to use (global, partitioned, or EDF(k))"),
+        )
+        .arg(
+            Arg::new("workers")
+                .short('w')
+                .long("workers")
+                .help("Number of workers to run the simulation")
+                .default_value("4"),
+        )
+        .arg(
+            Arg::new("heuristic")
+                .short('h')
+                .long("heuristic")
+                .help("Heuristic to use for partitioned scheduling")
+                .value_parser(["ff", "nf", "bf", "wf"]),
+        )
+        .arg(
+            Arg::new("sorting")
+                .short('s')
+                .long("sorting")
+                .help("Task ordering based on utilization")
+                .value_parser(["iu", "du"]),
+        )
 }
 
-
-
-fn global_edf(tasks: &mut Vec<Task>, m: usize) -> Vec<Task> {
-    tasks.sort_by(|a, b| a.deadline().cmp(&b.deadline()));
-    tasks.iter().take(m).cloned().collect()
-}
-
-fn edf_k(tasks: &mut Vec<Task>, m: usize, k: usize) -> Vec<Task> {
-    tasks.sort_by(|a, b| a.deadline().cmp(&b.deadline()));
-    tasks.iter().take(k.min(m)).cloned().collect()
-}
-
-
-    
+/// Entry point of the program.
 fn main() {
-    // cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
-    // example : cargo run test.csv 4 -v partitioned -w 8 -h ff -s iu
-    let matches:ArgMatches = build_cli_command().get_matches();
+    // Example usage: cargo run <task_file> <m> -v global|partitioned|<k> [-w <w>] [-h ff|nf|bf|wf] [-s iu|du]
+    // Example: cargo run test.csv 4 -v partitioned -w 8 -h ff -s iu
+    let matches: ArgMatches = build_cli_command().get_matches();
 
-    // Read tasks from file
-    let mut taskset = match read_task_file(matches.get_one::<String>("task_file").unwrap()) {
+    // Read tasks from the specified file
+    let taskset = match read_task_file(matches.get_one::<String>("task_file").unwrap()) {
         Ok(taskset) => taskset,
         Err(e) => {
             eprintln!("Error reading task file: {}", e);
-            process::exit(5);
+            process::exit(SchedulingCode::Error as i32);
         }
     };
+
+    // Determine default parallelism for the system
     let default_parallelism_approx = available_parallelism().unwrap().get();
 
-    let heuristic = matches.get_one::<String>("heuristic").unwrap();
-    let core_number = matches.get_one::<String>("m").unwrap().parse::<usize>().unwrap_or(1); // processors for the simulation
-    let thread_number = matches.get_one::<String>("workers").unwrap().parse::<usize>().unwrap_or(default_parallelism_approx); // nbr threads
-    let version = matches.get_one::<String>("version").unwrap();
-    let sorting = matches.get_one::<String>("sorting").unwrap();
+    // Parse command-line arguments
+    let core_number = matches
+        .get_one::<String>("m")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or(1);
+    let version: &String = matches.get_one::<String>("version").unwrap();
+    let thread_number = matches
+        .get_one::<String>("workers")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap_or(default_parallelism_approx);
+    let heuristic = matches
+        .get_one::<String>("heuristic")
+        .map(|s| Heuristic::from_str(s).unwrap_or_else(|_| {
+            eprintln!("Invalid heuristic: {}. Falling back to FirstFit.", s);
+            Heuristic::FirstFit
+        }))
+        .unwrap_or(Heuristic::FirstFit);
+    let sorting = matches
+        .get_one::<String>("sorting")
+        .map(|s| Sorting::from_str(s).unwrap_or_else(|_| {
+            eprintln!("Invalid sorting: {}. Falling back to IncreasingUtilization.", s);
+            Sorting::IncreasingUtilization
+        }))
+        .unwrap_or(Sorting::IncreasingUtilization);
 
-    //println!("Taskset : {:#?}", taskset.get_tasks());
-
-    let mut scheduler: Scheduler = Scheduler::new(taskset, core_number, thread_number, heuristic.clone(), sorting.clone());          
-    match version.as_str() {
+    // Select scheduler type based on version
+    let mut scheduler: Box<dyn Scheduler> = match version.as_str() {
         "partitioned" => {
-            scheduler.set_version(EDFVersion::Partitioned);
-            println!("Partitioned");
+            println!("Partitioned scheduling selected.");
+            Box::new(PartitionScheduler::new(taskset, core_number, thread_number, heuristic, sorting))
         }
         "global" => {
-            scheduler.set_version(EDFVersion::Global);
-            println!("Schedule Tasks (Global EDF)");
+            println!("Global EDF scheduling selected.");
+            // Replace with actual global EDF scheduler initialization
+            unimplemented!("Global EDF scheduler is not yet implemented.");        }
+        _ => {
+            println!("EDF(k) scheduling selected.");
+            // Replace with actual EDF(k) scheduler initialization
+            unimplemented!("EDF(k) scheduler is not yet implemented.");
         }
-        _ => { // assume k is an integer if not the other two
-            if let Ok(k) = version.parse::<usize>() {
-                scheduler.set_version(EDFVersion::EDFk(k));
-                println!("Schedule Tasks (EDF({:?}))", k);
-            } else {
-                eprintln!(
-                    "Invalid version: '{}'. Please use 'partitioned', 'global', or a valid integer for EDF(k).",
-                    version
-                );
-                // Handle the error (e.g., exit the program or return an error)
-                std::process::exit(5); // Optional: Exit the program with an error code
-            }
-        }
-    }
+    };
 
-    let schedulable = scheduler.test_task_set();
-        
-    println!("{:?}", schedulable);
+    // Check if the task set is schedulable
+    let schedulable = scheduler.is_schedulable();
+    println!("Schedulability result: {:?}", schedulable);
 
+    // Exit with the appropriate scheduling code
     process::exit(schedulable as i32);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use read_task_file;
 
     #[test]
     fn test_read_task_file_valid() {
@@ -162,7 +167,7 @@ mod tests {
 
         std::fs::write(file_path, task_file_content).expect("Unable to write test file");
 
-        let taskset = read_task_file(&file_path.to_string()).expect("Failed to read task set");
+        let taskset = read_task_file(file_path).expect("Failed to read task set");
         let task = &taskset.get_tasks()[0];
 
         assert_eq!(taskset.get_tasks().len(), 2);
@@ -181,7 +186,7 @@ mod tests {
 
         std::fs::write(file_path, task_file_content).expect("Unable to write test file");
 
-        let result = read_task_file(&file_path.to_string());
+        let result = read_task_file(file_path);
         assert!(result.is_err());
 
         std::fs::remove_file(file_path).expect("Failed to clean up test file");

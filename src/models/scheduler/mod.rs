@@ -1,8 +1,8 @@
 pub mod scheduler;
+pub mod partition_scheduler;
 pub mod core;
 
 
 pub use scheduler::Scheduler;
-// pub use core::GlobalCore;
-// pub use core::PartitionnedCore;
+pub use partition_scheduler::PartitionScheduler;
 pub use core::Core;

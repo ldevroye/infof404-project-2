@@ -5,6 +5,7 @@ pub enum SchedulingCode {
     UnschedulableSimulated = 2,
     UnschedulableShortcut = 3,
     CannotTell = 4,
+    Error = 5,
 }
 
 
@@ -15,7 +16,7 @@ pub enum EDFVersion {
     EDFk(usize),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Heuristic {
     FirstFit,
     NextFit,
@@ -23,8 +24,30 @@ pub enum Heuristic {
     WorstFit,
 }
 
-#[derive(Debug)]
+impl Heuristic {
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "ff" => Ok(Self::FirstFit),
+            "nd" => Ok(Self::NextFit),
+            "bf" => Ok(Self::BestFit),
+            "wf" => Ok(Self::WorstFit),
+            _ => Err(format!("Unknown heuristic: {}", s)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Sorting {
     IncreasingUtilization,
     DecreasingUtilization,
+}
+
+impl Sorting {
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "iu" => Ok(Self::IncreasingUtilization),
+            "du" => Ok(Self::DecreasingUtilization),
+            _ => Err(format!("Unknown sorting order: {}", s)),
+        }
+    }
 }
