@@ -1,11 +1,9 @@
-use crate::models::job;
-use crate::{partition, Job, SchedulingCode, TaskSet, TimeStep, ID};
-use crate::constants::{EDFVersion, Heuristic};
-use crate::scheduler::{Core};//, GlobalCore, PartitionnedCore} 
+use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID};
+use crate::constants::EDFVersion;
+use crate::scheduler::core::Core;
 
 use std::cmp::Ordering;
 use std::process::exit;
-use std::result;
 
 
 pub struct Scheduler{

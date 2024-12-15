@@ -1,12 +1,6 @@
-use crate::constants::EDFVersion;
-use crate::{Job, Partition, SchedulingCode, TaskSet, TimeStep, ID, Task};
-use crate::scheduler::{Scheduler};
-
-use std::ops::Add;
-use std::{task, thread, usize};
-use std::sync::{Arc, Mutex};
+use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID, Task};
 use std::collections::HashMap;
-
+use std::usize;
 
 #[derive(Debug)]
 pub struct Core {
