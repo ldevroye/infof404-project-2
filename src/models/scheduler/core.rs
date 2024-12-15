@@ -224,19 +224,24 @@ impl Core {
         }
 
         if !self.task_set.is_feasible() {
-            return Some(SchedulingCode::UnschedulableShortcut); // If tasks are not feasible, return unschedulable
+            return Some(SchedulingCode::UnschedulableShortcut);
         }
 
-        None
+        
+        if self.task_set.checking_schedulability() { // TODO check ?
+            if self.task_set.schedulability_proven(&self.task_set) {
+                return Some(SchedulingCode::SchedulableShortcut);
+            } else {
+                return Some(SchedulingCode::UnschedulableShortcut);
+            }
+        }
+        
+        return None;
     }
 
-    /// Simulates the scheduling for partitioned tasks.
-    ///
-    /// # Returns
-    /// A `SchedulingCode` indicating the result of the simulation (schedulable or unschedulable).
     pub fn simulate_partitionned(&mut self) -> SchedulingCode {
         if let Some(result_shortcut) = self.test_shortcuts() {
-            return result_shortcut; // Early return if a shortcut is found
+            return result_shortcut;
         }
 
         self.feasibility_interval = Some(self.task_set.feasibility_interval_part().1);
