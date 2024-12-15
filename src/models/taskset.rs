@@ -24,7 +24,6 @@ impl TaskSet {
 
     pub fn is_feasible(&self) -> bool {
         self.utilisation() <= 1 as f64 && self.tasks.iter().all(|t| t.wcet() <= t.deadline())
-        
     }
 
     pub fn is_empty(&self) -> bool {

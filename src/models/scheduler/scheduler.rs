@@ -208,7 +208,7 @@ impl Scheduler {
     
         // Spawn threads to process cores
         let mut handles = Vec::new();
-        for _ in 1..self.num_threads {
+        for _ in 0..self.num_threads {
             let num_core_done = Arc::clone(&num_core_done);
             let cores = Arc::clone(&cores);
             let result_shared = Arc::clone(&result_shared);

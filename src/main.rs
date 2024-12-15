@@ -137,7 +137,7 @@ fn main() {
                 println!("Schedule Tasks (EDF({:?}))", k);
             } else {
                 eprintln!(
-                    "Invalid version: '{}'. Please use 'partitioned', 'global', 'DM' or a valid integer for EDF(k).",
+                    "Invalid version: '{}'. Please use 'partitioned', 'global', 'dm' or a valid integer for EDF(k).",
                     version
                 );
                 
