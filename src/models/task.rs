@@ -1,4 +1,5 @@
-use super::{job::Job, TimeStep, ID};
+use crate::utils::constants::{TimeStep, ID};
+use crate::models::job::Job;
 
 /// Struct representing a task in the scheduling system.
 #[derive(Clone, Debug, PartialEq)]

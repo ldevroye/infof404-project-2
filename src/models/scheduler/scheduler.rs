@@ -1,12 +1,10 @@
-use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID};
-use crate::constants::Version;
-use crate::scheduler::Core;
+use crate::{SchedulingCode, TaskSet, Core};
+use crate::constants::{Version, ID};
 
 use std::cmp::Ordering;
 use std::process::exit;
-use std::{result, thread};
+use std::thread;
 use std::sync::{Arc, Mutex};
-use std::thread::current;
 
 pub struct Scheduler {
     task_set: TaskSet,
@@ -19,11 +17,11 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    /// Creates a new scheduler instance.
+    /// Creates a new scheduler instance with a specified task set, number of cores, threads, heuristic, and sorting order.
     pub fn new(task_set: TaskSet, num_cores: usize, num_threads: usize, heuristic: String, sorting_order: String) -> Self {
         Self {
             task_set,
-            version: Version::Partitioned,
+            version: Version::PartitionEDF, // Default version
             num_cores,
             num_threads,
             cores: (1..=num_cores).map(|id| Core::new(id as ID)).collect(),
@@ -61,7 +59,7 @@ impl Scheduler {
         }
 
         // If any task has full utilization, it's not schedulable
-        if self.task_set.get_task(k).unwrap().utilisation() == 1.0 {
+        if self.task_set.get_task_by_index(k).unwrap().utilisation() == 1.0 {
             return false;
         }
 
@@ -156,8 +154,6 @@ impl Scheduler {
 
     /// Main function for partitioned EDF scheduling.
     pub fn compute_partitionned(&mut self) -> SchedulingCode {
-        let mut thread_running = 0; // Tracks threads actively running
-
         let partition = self.partition_tasks();
     
         // Clone task sets for each core
@@ -165,9 +161,7 @@ impl Scheduler {
             .map(|id| Core::new_task_set(id as ID, partition[id - 1].clone()))
             .collect();
         println!("Cores : {:#?}", self.cores);
-    
-        let mut result = SchedulingCode::SchedulableShortcut;
-    
+        
         // Use a shared counter to track completed cores
         let num_core_done = Arc::new(Mutex::new(0));
     
@@ -228,265 +222,63 @@ impl Scheduler {
         // Return the aggregated result
         let final_result = result_shared.lock().unwrap();
         return final_result.clone();
+    }
 
-            /* 
-            {
-                let mut threads_lock = threads.lock().unwrap();
+    /// edf_k job scheduling: gives the sequence of the task execution based on EDF(k) policy.
+    pub fn edf_k(&mut self) -> SchedulingCode {
+        let partition = self.partition_tasks();
+        self.cores = (1..=self.num_cores)
+            .map(|id| Core::new_task_set(id as ID, partition[id - 1].clone()))
+            .collect();
     
-                // Check if any thread has completed
-                threads_lock.retain(|handle| {
-                    if handle.is_finished() {
-                        thread_running -= 1;
-                        false // Remove finished thread from the list
-                    } else {
-                        true // Keep running threads
+        let num_core_done = Arc::new(Mutex::new(0));
+        let cores = Arc::new(Mutex::new(self.cores.clone()));
+        let num_cores = self.num_cores;
+    
+        let result_shared = Arc::new(Mutex::new(SchedulingCode::SchedulableShortcut));
+    
+        let mut handles = Vec::new();
+        for _ in 1..self.num_threads {
+            let num_core_done = Arc::clone(&num_core_done);
+            let cores = Arc::clone(&cores);
+            let result_shared = Arc::clone(&result_shared);
+    
+            let handle = thread::spawn(move || {
+                loop {
+                    let mut done = num_core_done.lock().unwrap();
+                    if *done >= num_cores {
+                        break;
                     }
-                });
-            }
-    
-            if thread_running < thread_number {
-                // Clone the Arc for each new thread
-                let partition_clone = Arc::clone(&partition);
-    
-                let handle = thread::spawn(move || {
-                    // Lock the partition inside the thread to safely access it
-                    let mut partition_lock = partition_clone.lock().unwrap();
-                    let taskset = partition_lock.get_mut(processor_done).unwrap();
-                    println!("Processor {} is running.", processor_done + 1);
-                    simulate(taskset); // Simulate processing of each processor
-                    println!("Processor {} is done.", processor_done + 1);
-                });
-    
-                {
-                    let mut threads_lock = threads.lock().unwrap();
-                    threads_lock.push(handle);
-                }
-    
-                thread_running += 1;
-                processor_done += 1;
-            } else {
-                // If max threads are running, wait a bit
-                thread::sleep(std::time::Duration::from_millis(100));
-            }
             
+                    let core_id = *done;
+                    *done += 1;
+                    drop(done);
+            
+                    let mut cores_guard = cores.lock().unwrap();
+                    if let Some(current_core) = cores_guard.get_mut(core_id) {
+                        let resp = current_core.edf_k_schedule();
+                        let mut result_lock = result_shared.lock().unwrap();
+                        if !(resp == SchedulingCode::SchedulableShortcut || resp == SchedulingCode::SchedulableSimulated) {
+                            println!("Taskset not schedulable");
+                            *result_lock = resp;
+                        } else if resp == SchedulingCode::SchedulableSimulated {
+                            *result_lock = SchedulingCode::SchedulableSimulated;
+                        }
+                        drop(result_lock);
+                    } else {
+                        println!("Error: Could not get core with id {}", core_id);
+                    }
+                }
+            });
+    
+            handles.push(handle);
         }
     
-        // Wait for all threads to complete
-        for handle in Arc::try_unwrap(threads).unwrap().into_inner().unwrap() {
+        for handle in handles {
             handle.join().unwrap();
         }
-        
     
-        SchedulingCode::SchedulableSimulated
-        */
-    }
-
-
-    /// edf_k job scheduling : gives the job with lowest shown deadline
-    pub fn schedule_jobs(queue: &Vec<(Job, usize)>, k: usize) -> Option<ID> {
-
-        // Initialize with the absolute deadline of the first job in the list.
-        
-        if queue.len() == 0 {
-            return None;
-        }
-
-        let mut smallest = TimeStep::MAX;
-        let mut index_to_ret: Option<ID> = None;
-
-        // Find the job with the earliest deadline
-        for i in 0..queue.len() {
-            if smallest == TimeStep::MIN {
-                break;
-            }
-
-            let job = &queue[i];
-            let current_deadline = job.absolute_deadline();
-            if current_deadline < smallest {
-                smallest = current_deadline;
-                index_to_ret = Some(i as ID);
-            }
-        }
-
-        index_to_ret
-    }
-    
-    /// Computes the task set among all the cores using EDF(k), with possible migrations between cores during simulation.
-    pub fn compute_edfk(&mut self) -> SchedulingCode {
-
-        if !self.check_edf_k_schedulability() {
-            return SchedulingCode::UnschedulableShortcut;
-        }
-
-        let k = self.get_k();
-        let mut queue: Vec<(Job, ID)> = Vec::new();
-        let mut result = SchedulingCode::SchedulableSimulated;
-
-        // Compute the feasibility interval for the task set
-        let (mut time, max_time) = self.task_set.feasibility_interval_global();
-        println!("interval : [{:?}, {:#?}]", time, max_time);
-        let mut threash_hold = max_time / 100;
-
-        // Set the initial time for all cores
-        self.cores.iter_mut().for_each(|core| core.set_time(time));
-
-        while time < max_time {
-            let mut job_to_add = self.task_set.release_jobs(time);
-
-            // Set the jobs' deadline for task migration
-            if !job_to_add.is_empty() {
-                for i in 0..job_to_add.len() {
-                    job_to_add[i].set_deadline(time);
-                }
-            }
-
-            // Handle migrations across cores during scheduling
-            for (mut task, core_id) in job_to_add {
-                let mut assignable_core = self.cores.get_mut(core_id as usize).unwrap();
-                if !assignable_core.is_accepted(task) {
-                    assignable_core = self.cores.get_mut(core_id as usize).unwrap();
-                    if !assignable_core.accepted {
-                        continue;
-                    }
-                    assignable_core.add_task(task);
-                } else {
-                    assignable_core.add_task(task);
-                }
-            }
-
-            let mut response_code = SchedulingCode::SchedulableSimulated;
-
-            // Check for task migrations across cores
-            for mut job in self.cores.iter_mut() {
-                if !job.processing {
-                    continue;
-                }
-
-                let result_schedule = Scheduler::schedule_jobs_dm(&queue);
-                if result_schedule.is_none() { // there is no job not handleled by a core
-                    break;
-                }
-
-                let elected_index: ID = result_schedule.unwrap();
-
-                // Extract the `current_job` and `core_id` without holding a mutable borrow
-                let (current_job, core_id) = {
-                    let (job, core) = queue.get_mut(elected_index).unwrap();
-                    (job.clone(), *core)
-                };
-
-            
-                let (current_job, core_id) = &mut queue[elected_index];
-
-                // Check if we should replace current job
-                if !current_core.is_assigned() ||
-                    (!any_available_core &&
-                    current_core.is_assigned() &&
-                    current_core.current_job_task_deadline().unwrap() > current_job.task_deadline() &&
-                    current_core.current_job_deadline().is_some())
-                {
-                    if current_core.is_assigned() {
-                        current_core.remove(current_job.task_id());
-                    }
-
-                    *core_id = current_core.id();
-                    let task_clone = self.task_set.get_task_by_id(current_job.task_id()).unwrap().clone();
-                    current_core.add_job(current_job.clone(), task_clone);
-                }
-                
-            }
-        
-            // Simulate one time unit
-            for index_core in 0..self.num_cores-1 {
-                let current_core = self.cores.get_mut(index_core).unwrap();
-                let resp = current_core.simulate_step(1);
-
-                if resp == CoreValue::Missed {
-                    result = SchedulingCode::UnschedulableSimulated;
-                } else if resp == CoreValue::Commplete {
-                    // Remove completed jobs from queue
-                    queue.retain(|(_, id)| *id != current_core.id());
-                }
-            }
-
-            // Check deadlines for unhandled jobs
-            for (job, id) in &queue {
-                if *id == 0 && job.deadline_missed(time) {
-                    result = SchedulingCode::UnschedulableSimulated;
-                    break;
-                }
-            }
-
-            if result == SchedulingCode::UnschedulableSimulated {
-                break;
-            }
-
-            time += 1;
-            if (time > thresh_hold) {
-                println!("{}% done", (time*100)/max_time);
-                thresh_hold += max_time/100;
-            }
-        }
-
-        result
-    }
-
-
-
-
-    /// Helper function for DM to pick the job with the highest priority (lowest relative deadline task).
-    fn schedule_jobs_dm(queue: &Vec<(Job, ID)>) -> Option<ID> {
-        if queue.is_empty() {
-            return None;
-        }
-
-        let mut best_priority = TimeStep::MAX;
-        let mut index_to_ret: Option<ID> = None;
-
-        for (i, (job, core_id)) in queue.iter().enumerate() {
-            if *core_id != 0 {
-                // Already taken by a core
-                continue;
-            }
-
-            // Get task priority (ie, task deadline)
-            let task_priority = queue.iter().map(|(job, _)| job.task_deadline()).min().unwrap();
-            if task_priority < best_priority {
-                best_priority = task_priority;
-                index_to_ret = Some(i as ID);
-            }
-        }
-
-        index_to_ret
-    }
-
-
-    /// Hub function to chose which version to use
-    pub fn test_task_set(&mut self) -> SchedulingCode {
-        let result: SchedulingCode;
-        match self.version {
-            Version::EDFk(value) => {
-                result = self.compute_edfk();
-            }
-            Version::Global => {
-                result = self.compute_global();
-            }
-            Version::Partitioned => {
-                result = self.compute_partitionned();
-            }
-            Version::GlobalDM => {
-                result = self.compute_dm();
-            }
-
-            _ => {
-                eprintln!("Unknow EDF version");
-                return SchedulingCode::CannotTell;
-            }
-        }
-
-        let migrations: usize = self.cores.iter().map(|core| core.get_migrations()).sum();
-        println!("Number migrations : {}", migrations);
-        return result;
-        
+        let final_result = result_shared.lock().unwrap();
+        return final_result.clone();
     }
 }

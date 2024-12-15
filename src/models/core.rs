@@ -1,9 +1,9 @@
-use crate::constants::CoreValue;
-use crate::{Job, SchedulingCode, TaskSet, TimeStep, ID, Task};
+use crate::{Job, SchedulingCode, TaskSet, Task};
+use crate::constants::{TimeStep, ID, CoreValue};
 
 use std::collections::HashMap;
 
-
+/// Represents a computational core in the scheduling system.
 #[derive(Debug, Clone)]
 pub struct Core {
     id: ID,                             // Unique identifier for the core
@@ -55,7 +55,7 @@ impl Core {
         }
     }
 
-    /// Returns whether the core has tasks assigned to it.
+    /// Checks if the core has tasks assigned to it.
     pub fn is_assigned(&self) -> bool {
         !self.task_set.is_empty()
     }
@@ -226,19 +226,11 @@ impl Core {
         if !self.task_set.is_feasible() {
             return Some(SchedulingCode::UnschedulableShortcut);
         }
-
-        
-        if self.task_set.checking_schedulability() { // TODO check ?
-            if self.task_set.schedulability_proven(&self.task_set) {
-                return Some(SchedulingCode::SchedulableShortcut);
-            } else {
-                return Some(SchedulingCode::UnschedulableShortcut);
-            }
-        }
         
         return None;
     }
 
+    /// Simulates the partitioned scheduling process.
     pub fn simulate_partitionned(&mut self) -> SchedulingCode {
         if let Some(result_shortcut) = self.test_shortcuts() {
             return result_shortcut;

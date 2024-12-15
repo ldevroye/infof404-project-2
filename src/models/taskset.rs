@@ -1,6 +1,6 @@
+use super::{Job, Task};
+use crate::constants::{TimeStep, ID};
 use crate::multiple_lcm;
-
-use super::{Job, Task, TimeStep, ID};
 
 /// A set of tasks in the scheduling system.
 #[derive(Debug, Clone)]
@@ -133,14 +133,14 @@ impl TaskSet {
         self.tasks.retain(|task| task.id() != id);
     }
 
-    /// Returns the task at the specified index (or ID).
+    /// Returns the task at the specified index.
     /// 
     /// # Arguments
-    /// * `index` - The index (or ID) of the task to retrieve.
+    /// * `index` - The index of the task to retrieve.
     /// 
     /// # Returns
     /// * `Option<&Task>` - The task at the specified index, or `None` if the index is out of bounds.
-    pub fn get_task(&self, index: usize) -> Option<&Task> {
+    pub fn get_task_by_index(&self, index: usize) -> Option<&Task> {
         if index >= self.tasks.len() {
             return None;
         }
@@ -177,7 +177,7 @@ impl TaskSet {
     /// # Returns
     /// * `Option<f64>` - The utilization of the task at the specified index, or `None` if the task does not exist.
     pub fn get_task_utilisation(&self, index: usize) -> Option<f64> {
-        Some(self.get_task(index).unwrap().utilisation())
+        Some(self.get_task_by_index(index).unwrap().utilisation())
     }
 
     /// Returns the highest utilization out of all the tasks in the task set.
@@ -196,14 +196,14 @@ impl TaskSet {
     /// # Returns
     /// * `(TimeStep, TimeStep)` - The feasibility interval.
     pub fn feasibility_interval_global(&self) -> (TimeStep, TimeStep) {
-        // [0, Omax + 2P]
-
+        // Feasibility interval: [0, Omax + 2 * LCM(periods)]
+        
         let o_max = self.tasks.iter().map(|task| task.offset()).max().unwrap();
         let vec_period: Vec<TimeStep> = self.tasks.iter().map(|task| task.period()).collect();
         let p = multiple_lcm(vec_period);
 
         // Return the feasibility interval based on the offset and periods
-        return (0, o_max + (2 * p));
+        (0, o_max + (2 * p))
     }
 
     /// Computes the feasibility interval for a part of the task set based on WCET and periods.
@@ -211,24 +211,21 @@ impl TaskSet {
     /// # Returns
     /// * `(TimeStep, TimeStep)` - The feasibility interval for the part of the task set.
     pub fn feasibility_interval_part(&self) -> (TimeStep, TimeStep) {
-        let w_0 = self.tasks
-            .iter()
-            .map(|task| task.wcet())
-            .sum::<TimeStep>();
+        let w_0 = self.tasks.iter().map(|task| task.wcet()).sum::<TimeStep>();
 
         let mut w_k = w_0;
 
         loop {
-            let w_k_next = self.tasks
-                .iter()
+            let w_k_next = self.tasks.iter()
                 .map(|task| {
                     let ceiling_term = (w_k + task.period() - 1) / task.period();
                     ceiling_term * task.wcet()
                 })
                 .sum();
 
+            // If the WCET sums converge, break the loop
             if w_k_next == w_k {
-                break (w_0, w_k);
+                return (w_0, w_k);
             } else {
                 w_k = w_k_next;
             }
