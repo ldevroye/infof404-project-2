@@ -49,11 +49,19 @@ impl Core {
         !self.task_set.is_empty()
     }
 
+    pub fn get_remaining_time(&self) -> TimeStep {
+        self.queue.iter().map(|job| job.remaining_time()).sum::<TimeStep>()
+    }
+
     /// Try to add a task to the core if the utilisation is not < 0 after the add
     /// 
     /// Returns wether the task could be added or not
     pub fn add(&mut self, task: Task) -> bool {
-        if self.utilisation_left - task.utilisation() <= 0.0 {
+        if self.task_set.get_task_by_id(task.id()).is_some() {
+            return false;
+        }
+
+        if self.utilisation_left - task.utilisation() < 0.0 {
             return false;
         }
 
@@ -65,7 +73,9 @@ impl Core {
     }
 
     pub fn add_job(&mut self, job: Job, task:Task) {
+        self.queue.clear();
         self.queue.push(job);
+        
         self.add(task);
     }
 
@@ -95,6 +105,7 @@ impl Core {
         if !self.task_set.task_exists(task_id) {return;}
 
         self.task_set.retain_not(task_id);
+        self.queue.retain(|job| job.task_id()!=task_id);
         self.migrate(task_id);
     }
 
@@ -228,7 +239,7 @@ impl Core {
 
         // Check for missed deadlines
         if self.queue.iter().any(|job| job.deadline_missed(self.current_time)) {
-            println!("time {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, self.queue[0].task_id(), self.queue[0].id());
+            println!("Missed at time {:?}, core_id {}, task_id {}, job_id {} job_deadline {}", self.current_time, self.id, self.queue[0].task_id(), self.queue[0].id(), self.queue[0].real_absolute_deadline());
             result = CoreValue::Missed;
 
         } else {
@@ -242,8 +253,8 @@ impl Core {
                 if job.is_complete() {
                     //println!("complete {:?}, core_id {}, task_id {}, job_id {}", self.current_time, self.id, job.task_id(), job.id());
 
-                    self.task_set.retain_not(job.task_id());
-                    self.queue.remove(0);
+                    self.task_set.get_tasks_mut().clear();
+                    self.queue.clear();
                     result = CoreValue::Commplete;
                 }
             }

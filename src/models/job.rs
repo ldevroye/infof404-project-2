@@ -40,8 +40,16 @@ impl Job {
         self.remaining_time
     }
 
+    pub fn set_remaining_time(&mut self, new: TimeStep) {
+        self.remaining_time = new;
+    }
+
     pub fn absolute_deadline(&self) -> TimeStep {
         self.show_absolute_deadline
+    }
+
+    pub fn real_absolute_deadline(&self) -> TimeStep {
+        self.real_absolute_deadline
     }
 
     pub fn set_deadline_inf(&mut self) {

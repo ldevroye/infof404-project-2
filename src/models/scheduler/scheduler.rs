@@ -311,7 +311,6 @@ impl Scheduler {
 
     }
     
-    
 
     pub fn compute_edfk(&mut self) -> SchedulingCode {
 
@@ -320,13 +319,12 @@ impl Scheduler {
         }
 
         let k = self.get_k();
-        
-        let mut result = SchedulingCode::CannotTell;
+        let mut queue: Vec<(Job, ID)> = Vec::new();
+        let mut result = SchedulingCode::SchedulableSimulated;
         
         let (mut time, max_time) = self.task_set.feasibility_interval();
 
         while time < max_time {
-            let mut queue: Vec<(Job, ID)> = Vec::new();
             let mut job_to_add = self.task_set.release_jobs(time);
 
             // set the jobs deadline with task_id < k to -inf 
@@ -338,9 +336,12 @@ impl Scheduler {
 
             // cores have id >= 1 so 0 = not handled
             queue.extend(job_to_add.into_iter().map(|job| (job, 0))); 
+
+            //println!("QUEUE FIRST at time {} {:#?}", time, queue);
             
             // try to add 1 job with lowest prio to each core
             for index_core in 0..self.num_cores-1 {
+                let any_available_core = self.cores.iter().any(|core| !core.is_assigned());
                 let current_core = self.cores.get_mut(index_core).unwrap();
 
                 // if queue empty or the job in the core is already == -inf
@@ -352,45 +353,59 @@ impl Scheduler {
                     }
                 }
 
-                let result = Scheduler::schedule_jobs(&queue,k);
-                if result.is_none() { // there is no job not handleled by a core
+                let result_schedule = Scheduler::schedule_jobs(&queue,k);
+                if result_schedule.is_none() { // there is no job not handleled by a core
                     break;
                 }
 
-                let elected_index: ID = result.unwrap();
+                let elected_index: ID = result_schedule.unwrap();
 
-                let (current_job, core_id) = queue.get_mut(elected_index).unwrap();
+                // Extract the `current_job` and `core_id` without holding a mutable borrow
+                let (current_job, core_id) = {
+                    let (job, core) = queue.get_mut(elected_index).unwrap();
+                    (job.clone(), *core)
+                };
 
-                println!("result {}, task_id {}, core {}", elected_index, current_job.task_id(), core_id);
-
-
-                // check if the core is not assigned 
-                // or if the deadline of the new_job is < than the job already in the core 
+                // Check if the core is not assigned 
+                // or if the new job's deadline is earlier and there is no other core available
                 if !current_core.is_assigned() || 
-                (current_core.is_assigned() && 
-                  (current_core.current_job_deadline().unwrap() > current_job.absolute_deadline()) &&
-                  current_core.current_job_deadline().is_some()) {
+                (!any_available_core && current_core.is_assigned() && 
+                    current_core.current_job_deadline().unwrap() > current_job.absolute_deadline() &&
+                    current_core.current_job_deadline().is_some()) {
 
-
-                    if current_core.is_assigned() { 
+                    if current_core.is_assigned() {
                         current_core.remove(current_job.task_id());
+
+                        // Perform the second mutable operation after the first borrow ends
+                        if let Some((_, core_ref)) = queue
+                                                                .iter_mut()
+                                                                .find(|(_, core_ref)| *core_ref == current_core.id()) {
+                            //print!("putting {} to 0", core_ref);
+                            *core_ref = 0; // Reset the core ID
+                        }
                     }
 
-                    *core_id = current_core.id(); // swap or put the current_core_id
+                    // Reborrow `queue` mutably to update the core_id for the elected_index
+                    {
+                        let (_, core_id_mut) = queue.get_mut(elected_index).unwrap();
+                        //print!("(and maybe) put {} to {}\n", core_id_mut, current_core.id());
+                        *core_id_mut = current_core.id(); // Assign the current core ID
+                    }
 
                     let task_clone = self.task_set.get_task_by_id(current_job.task_id()).unwrap().clone();
-                    current_core.add_job(current_job.clone(), task_clone);
-
+                    // current_job is already cloned
+                    current_core.add_job(current_job, task_clone);
                 }
+
+
             }
 
-            println!("QUEUE at time {} {:#?}", time, queue);
+            //println!("QUEUE BEFORE at time {} {:#?}", time, self.cores);
 
             // simulate 1 step in each cores
             for index_core in 0..self.num_cores-1 {
 
                 let current_core = self.cores.get_mut(index_core).unwrap();
-
                 let resp = current_core.simulate_step(k);
                 if resp == CoreValue::Missed {
                     result = SchedulingCode::UnschedulableSimulated;
@@ -399,27 +414,37 @@ impl Scheduler {
                 } else if resp == CoreValue::Commplete {
                     // remove the job complete from queue
                     queue.retain(|(_, id)| *id != current_core.id());
+                } else { // running, you have to simu
+                    queue.iter_mut()
+                    .for_each(|(job, core_id)| if *core_id == current_core.id() 
+                    {job.set_remaining_time(current_core.get_remaining_time());});
                 }
             }
+
+            //println!("QUEUE AFTER at time {} {:#?}", time, queue);
 
             // test_deadlines for each jobs not handled
             for (job, id) in queue.iter() {
                 if *id == 0 { // unhandled
                     if job.deadline_missed(time) {
                         result = SchedulingCode::UnschedulableSimulated;
-                        println!("Unhandled deadline missed ({}) at time {}, task_id {}", job.task_deadline()+time, time, job.task_id());
+                        println!("Unhandled deadline missed ({}) at time {}, task_id {}", job.absolute_deadline(), time, job.task_id());
                         break;
                     }
                 }
             }
 
             if result == SchedulingCode::UnschedulableSimulated {
+                print!("break");
                 break;
             } 
 
-            time += 1
+            time += 1;
+            //if time > 6 {break;}
+            println!("scheduler time : {}", time);
         }
 
+        println!("bah kwa");
         return result;
 
     }
